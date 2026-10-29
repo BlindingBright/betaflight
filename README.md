@@ -6,7 +6,7 @@
 > It is experimental: use the official releases for normal flying.
 >
 > **Pilots: download, testing guide and log upload are on the project page:
-> [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight3DEdition)**
+> [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
 > (ready-to-flash TBS Lucid AIO build on the [v0.1.0-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.1.0-3d-test)).
 >
 > Base: Betaflight 4.5.1 (`77d01ba3b`). Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
