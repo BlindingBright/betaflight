@@ -1,3 +1,25 @@
+> [!IMPORTANT]
+> **This is a testing fork for 3D (bidirectional / reversible motor) mode.**
+> It exists to try out and flight-test changes and improvements to Betaflight's 3D mode,
+> with the hope that the ones that prove themselves get proposed for the main
+> [betaflight/betaflight](https://github.com/betaflight/betaflight) branch.
+> It is experimental: use the official releases for normal flying.
+>
+> Base: Betaflight 4.5.1 (`77d01ba3b`). Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
+> Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
+>
+> **Changes so far** (branch `3d-iterm-memory`; all default to stock behaviour):
+>
+> | Setting | Values | What it does |
+> |---|---|---|
+> | `3d_iterm_mode` | `RESET` (default, stock) / `HOLD` / `PER_DIRECTION` | What happens to I-term when the motors reverse. `PER_DIRECTION` remembers a slow-averaged I-term for each motor direction and restores it on reversal, so a direction-dependent trim (e.g. a CG offset that flips sign when inverted) isn't thrown away on every flip. |
+> | `3d_iterm_reset_ms` | 0-500, default 250 | Length of the post-reversal window (stock: hard-coded 250 ms). `RESET` zeroes I-term for it; `HOLD` / `PER_DIRECTION` freeze integration while the props cross zero rpm. |
+> | `debug_mode = 3D_ITERM` | | [0] motor direction, [1] window active, [2-4] upright memory x10, [5-7] inverted memory x10 |
+>
+> The blackbox header also records `3d_deadband_throttle`, `3d_iterm_mode` and `3d_iterm_reset_ms`.
+>
+> Build: `make CONFIG=TBS_LUCID_AIO` with the [betaflight/config](https://github.com/betaflight/config) `4.5-config` branch in `src/config`.
+
 ![Betaflight](images/bf_logo.png)
 
 [![Latest version](https://img.shields.io/github/v/release/betaflight/betaflight)](https://github.com/betaflight/betaflight/releases) [![Build](https://img.shields.io/github/actions/workflow/status/betaflight/betaflight/nightly.yml?branch=master)](https://github.com/betaflight/betaflight/actions/workflows/nightly.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Join us on Discord!](https://img.shields.io/discord/868013470023548938)](https://discord.gg/n4E6ak4u3c)
