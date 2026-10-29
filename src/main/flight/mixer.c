@@ -19,6 +19,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <float.h>
 
@@ -107,6 +108,44 @@ static FAST_DATA_ZERO_INIT float motorRangeMax;
 static FAST_DATA_ZERO_INIT float motorOutputRange;
 static FAST_DATA_ZERO_INIT int8_t motorOutputMixSign;
 
+static FAST_DATA_ZERO_INIT float iterm3dMemory[2][XYZ_AXIS_COUNT]; // [0] normal, [1] inverted motor direction
+
+static void update3dIterm(bool reversed, bool inWindow)
+{
+    const uint8_t mode = flight3DConfig()->iterm_mode3d;
+    const int dir = motorOutputMixSign < 0 ? 1 : 0;
+
+    if (!ARMING_FLAG(ARMED)) {
+        memset(iterm3dMemory, 0, sizeof(iterm3dMemory));
+    } else if (mode == ITERM_3D_PER_DIRECTION) {
+        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            if (reversed) {
+                // start the new direction from its own remembered trim
+                pidData[axis].I = iterm3dMemory[dir][axis];
+            } else if (!inWindow) {
+                iterm3dMemory[dir][axis] += mixerRuntime.iterm3dMemoryK * (pidData[axis].I - iterm3dMemory[dir][axis]);
+            }
+        }
+    }
+
+    if (mode == ITERM_3D_RESET) {
+        pidSetItermFreeze3d(false);
+        if (inWindow) {
+            pidResetIterm();
+        }
+    } else {
+        // props have little authority while crossing zero rpm, don't wind up
+        pidSetItermFreeze3d(inWindow);
+    }
+
+    DEBUG_SET(DEBUG_3D_ITERM, 0, motorOutputMixSign);
+    DEBUG_SET(DEBUG_3D_ITERM, 1, inWindow);
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        DEBUG_SET(DEBUG_3D_ITERM, 2 + axis, lrintf(iterm3dMemory[0][axis] * 10.0f));
+        DEBUG_SET(DEBUG_3D_ITERM, 5 + axis, lrintf(iterm3dMemory[1][axis] * 10.0f));
+    }
+}
+
 static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 {
     static uint16_t rcThrottlePrevious = 0;   // Store the last throttle direction for deadband transitions
@@ -117,6 +156,7 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
     if (mixerRuntime.feature3dEnabled) {
         uint16_t rcCommand3dDeadBandLow;
         uint16_t rcCommand3dDeadBandHigh;
+        const int8_t previousMixSign = motorOutputMixSign;
 
         if (!ARMING_FLAG(ARMED)) {
             rcThrottlePrevious = rxConfig()->midrc; // When disarmed set to mid_rc. It always results in positive direction after arming.
@@ -211,10 +251,8 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             throttle = 0;
             currentThrottleInputRange = rcCommandThrottleRange3dHigh;
         }
-        if (currentTimeUs - reversalTimeUs < 250000) {
-            // keep iterm zero for 250ms after motor reversal
-            pidResetIterm();
-        }
+        const timeUs_t itermWindowUs = flight3DConfig()->iterm_reset_ms3d * 1000U;
+        update3dIterm(motorOutputMixSign != previousMixSign, currentTimeUs - reversalTimeUs < itermWindowUs);
     } else {
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         currentThrottleInputRange = PWM_RANGE;

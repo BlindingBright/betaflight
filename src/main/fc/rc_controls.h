@@ -117,6 +117,12 @@ typedef struct rcControlsConfig_s {
 
 PG_DECLARE(rcControlsConfig_t, rcControlsConfig);
 
+typedef enum {
+    ITERM_3D_RESET = 0,         // zero I-term for the window (stock behaviour)
+    ITERM_3D_HOLD,              // keep I-term, freeze integration for the window
+    ITERM_3D_PER_DIRECTION,     // load the remembered I-term of the new direction, freeze for the window
+} iterm3dMode_e;
+
 typedef struct flight3DConfig_s {
     uint16_t deadband3d_low;                // min 3d value
     uint16_t deadband3d_high;               // max 3d value
@@ -125,6 +131,8 @@ typedef struct flight3DConfig_s {
     uint16_t limit3d_low;                   // pwm output value for max negative thrust
     uint16_t limit3d_high;                  // pwm output value for max positive thrust
     uint8_t switched_mode3d;                // enable '3D Switched Mode'
+    uint16_t iterm_reset_ms3d;              // I-term reset/freeze window after a motor reversal
+    uint8_t iterm_mode3d;                   // iterm3dMode_e: what happens to I-term on a motor reversal
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);

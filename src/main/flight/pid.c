@@ -987,7 +987,8 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
                 pidRuntime.itermAccelerator = 0.0f; // no antigravity on yaw iTerm
             }
         }
-        const float iTermChange = (Ki + pidRuntime.itermAccelerator) * dynCi * pidRuntime.dT * itermErrorRate;
+        // 3D: no integration while the props cross zero rpm after a reversal
+        const float iTermChange = pidRuntime.itermFreeze3d ? 0.0f : (Ki + pidRuntime.itermAccelerator) * dynCi * pidRuntime.dT * itermErrorRate;
         pidData[axis].I = constrainf(previousIterm + iTermChange, -pidRuntime.itermLimit, pidRuntime.itermLimit);
 
         // -----calculate D component
@@ -1228,6 +1229,11 @@ float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, u
 void pidSetItermReset(bool enabled)
 {
     pidRuntime.zeroThrottleItermReset = enabled;
+}
+
+void pidSetItermFreeze3d(bool enabled)
+{
+    pidRuntime.itermFreeze3d = enabled;
 }
 
 float pidGetPreviousSetpoint(int axis)
