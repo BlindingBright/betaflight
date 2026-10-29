@@ -422,6 +422,7 @@ typedef struct pidRuntime_s {
     float itermLimitYaw;
     bool itermRotation;
     bool zeroThrottleItermReset;
+    bool itermFreeze3d;
     bool levelRaceMode;
     float tpaFactor;
     float tpaBreakpoint;
@@ -572,6 +573,7 @@ float calcHorizonLevelStrength(void);
 
 void dynLpfDTermUpdate(float throttle);
 void pidSetItermReset(bool enabled);
+void pidSetItermFreeze3d(bool enabled);
 float pidGetPreviousSetpoint(int axis);
 float pidGetDT(void);
 float pidGetPidFrequency(void);

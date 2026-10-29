@@ -343,6 +343,8 @@ void initEscEndpoints(void)
 
 void mixerInitProfile(void)
 {
+    mixerRuntime.iterm3dMemoryK = pt1FilterGain(ITERM_3D_MEMORY_CUTOFF_HZ, pidGetDT());
+
 #ifdef USE_DYN_IDLE
     if (useDshotTelemetry) {
         mixerRuntime.dynIdleMinRps = currentPidProfile->dyn_idle_min_rpm * 100.0f / 60.0f;

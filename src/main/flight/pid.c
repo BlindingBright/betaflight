@@ -1294,7 +1294,8 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
             }
         }
 
-        float iTermChange = (Ki + pidRuntime.itermAccelerator) * pidRuntime.dT * itermErrorRate;
+        // 3D: no integration while the props cross zero rpm after a reversal
+        float iTermChange = pidRuntime.itermFreeze3d ? 0.0f : (Ki + pidRuntime.itermAccelerator) * pidRuntime.dT * itermErrorRate;
 #ifdef USE_WING
         if (pidProfile->spa_mode[axis] != SPA_MODE_OFF) {
             // slowing down I-term change, or even making it zero if setpoint is high enough
@@ -1554,6 +1555,11 @@ float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, u
 void pidSetItermReset(bool enabled)
 {
     pidRuntime.zeroThrottleItermReset = enabled;
+}
+
+void pidSetItermFreeze3d(bool enabled)
+{
+    pidRuntime.itermFreeze3d = enabled;
 }
 
 float pidGetPreviousSetpoint(int axis)

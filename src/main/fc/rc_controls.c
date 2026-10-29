@@ -98,7 +98,9 @@ PG_RESET_TEMPLATE(flight3DConfig_t, flight3DConfig,
     .deadband3d_throttle = 50,
     .limit3d_low = 1000,
     .limit3d_high = 2000,
-    .switched_mode3d = false
+    .switched_mode3d = false,
+    .iterm_reset_ms3d = 250,
+    .iterm_mode3d = ITERM_3D_RESET,
 );
 
 bool isUsingSticksForArming(void)

@@ -24,6 +24,10 @@
 
 #include "flight/mixer.h"
 
+// per-direction 3D I-term memory follows I-term slowly, so it holds the steady trim
+// (e.g. a CG offset) of each direction rather than the last maneuver's windup
+#define ITERM_3D_MEMORY_CUTOFF_HZ 0.5f
+
 typedef struct mixerRuntime_s {
     uint8_t motorCount;
     motorMixer_t currentMixer[MAX_SUPPORTED_MOTORS];
@@ -31,6 +35,7 @@ typedef struct mixerRuntime_s {
     motorMixer_t launchControlMixer[MAX_SUPPORTED_MOTORS];
 #endif
     bool feature3dEnabled;
+    float iterm3dMemoryK;               // PT1 gain of the per-direction I-term memory
     float motorOutputLow;
     float motorOutputHigh;
     float disarmMotorOutput;
