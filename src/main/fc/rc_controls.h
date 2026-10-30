@@ -123,6 +123,17 @@ typedef enum {
     ITERM_3D_PER_DIRECTION,     // load the remembered I-term of the new direction, freeze for the window
 } iterm3dMode_e;
 
+typedef enum {
+    ITERM_3D_RELEASE_TIME = 0,  // hold I-term for 3d_iterm_reset_ms after a reversal
+    ITERM_3D_RELEASE_RPM,       // hold until every motor has restarted (eRPM), between 3d_iterm_min_ms and 3d_iterm_reset_ms
+} iterm3dRelease_e;
+
+typedef enum {
+    ITERM_3D_AXES_ALL = 0,
+    ITERM_3D_AXES_PITCH,
+    ITERM_3D_AXES_ROLL_PITCH,
+} iterm3dAxes_e;
+
 typedef struct flight3DConfig_s {
     uint16_t deadband3d_low;                // min 3d value
     uint16_t deadband3d_high;               // max 3d value
@@ -133,6 +144,12 @@ typedef struct flight3DConfig_s {
     uint8_t switched_mode3d;                // enable '3D Switched Mode'
     uint16_t iterm_reset_ms3d;              // I-term reset/freeze window after a motor reversal
     uint8_t iterm_mode3d;                   // iterm3dMode_e: what happens to I-term on a motor reversal
+    // v0.2: appended after the v0.1 fields (and their padding byte) so older saved settings load unchanged
+    uint16_t iterm_min_ms3d;                // shortest I-term hold after a reversal (RPM release)
+    uint8_t iterm_release3d;                // iterm3dRelease_e
+    uint8_t iterm_rpm_pct3d;                // RPM release: restart threshold, % of the average in-flight eRPM
+    uint8_t iterm_learn_hz_x10;             // per-direction memory learning rate, 0.1 Hz units
+    uint8_t iterm_axes3d;                   // iterm3dAxes_e: axes that use the per-direction memory
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);

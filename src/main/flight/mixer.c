@@ -108,38 +108,133 @@ static FAST_DATA_ZERO_INIT float motorRangeMax;
 static FAST_DATA_ZERO_INIT float motorOutputRange;
 static FAST_DATA_ZERO_INIT int8_t motorOutputMixSign;
 
-static FAST_DATA_ZERO_INIT float iterm3dMemory[2][XYZ_AXIS_COUNT]; // [0] normal, [1] inverted motor direction
+// per-direction I-term memory: [0] normal, [1] inverted motor direction. Kept across disarms, cleared on reboot.
+static FAST_DATA_ZERO_INIT float iterm3dMemory[2][XYZ_AXIS_COUNT];
 
-static void update3dIterm(bool reversed, bool inWindow)
+#ifdef USE_DSHOT_TELEMETRY
+// RPM release: per-motor restart detection after a 3D reversal (eRPM in telemetry units of 100)
+static FAST_DATA_ZERO_INIT float iterm3dErpm[MAX_SUPPORTED_MOTORS];      // last plausible eRPM reading
+static FAST_DATA_ZERO_INIT timeUs_t iterm3dErpmUs[MAX_SUPPORTED_MOTORS]; // when it was accepted
+static FAST_DATA_ZERO_INIT float iterm3dErpmAverage;                      // slow average while flying
+static FAST_DATA_ZERO_INIT uint8_t iterm3dMotorLow;                       // bit per motor: dropped below the threshold since the reversal
+static FAST_DATA_ZERO_INIT uint8_t iterm3dMotorRestarted;                 // bit per motor: back above it in the new direction
+
+// a real spool-up takes tens of ms; an AM32 desync reading jumps straight to a fixed high value
+#define ITERM_3D_MAX_ERPM_RISE_PER_S 20.0f      // as multiples of the average eRPM per second
+#define ITERM_3D_ERPM_RISE_SLACK     50.0f      // 5000 eRPM of telemetry noise
+
+// eRPM is unsigned, so a motor counts as restarted only after it has dropped below the threshold
+// (props crossing zero) and then climbed back above it
+static bool iterm3dAllMotorsRestarted(bool reversed, timeUs_t currentTimeUs)
 {
-    const uint8_t mode = flight3DConfig()->iterm_mode3d;
-    const int dir = motorOutputMixSign < 0 ? 1 : 0;
+    const int motorCount = mixerRuntime.motorCount;
+    const float threshold = iterm3dErpmAverage * flight3DConfig()->iterm_rpm_pct3d * 0.01f;
+    const float maxRisePerUs = iterm3dErpmAverage * ITERM_3D_MAX_ERPM_RISE_PER_S * 1e-6f;
 
-    if (!ARMING_FLAG(ARMED)) {
-        memset(iterm3dMemory, 0, sizeof(iterm3dMemory));
-    } else if (mode == ITERM_3D_PER_DIRECTION) {
+    if (reversed) {
+        iterm3dMotorLow = 0;
+        iterm3dMotorRestarted = 0;
+    }
+    for (int i = 0; i < motorCount; i++) {
+        const float erpm = getDshotErpm(i);
+        const timeDelta_t sinceUs = cmpTimeUs(currentTimeUs, iterm3dErpmUs[i]);
+        // falling readings are always accepted, rising ones only as fast as a motor can spin up, and never by
+        // more than one average step at once: a desync reading that persists must not become plausible over time
+        const float maxRise = MIN(maxRisePerUs * sinceUs, iterm3dErpmAverage) + ITERM_3D_ERPM_RISE_SLACK;
+        if (iterm3dErpmAverage <= 0.0f || erpm <= iterm3dErpm[i] + maxRise) {
+            iterm3dErpm[i] = erpm;
+            iterm3dErpmUs[i] = currentTimeUs;
+        }
+        if (iterm3dErpm[i] < threshold) {
+            iterm3dMotorLow |= 1 << i;
+        } else if (iterm3dMotorLow & (1 << i)) {
+            iterm3dMotorRestarted |= 1 << i;
+        }
+    }
+    return iterm3dMotorRestarted == (1 << motorCount) - 1;
+}
+#endif
+
+// true while I-term must stay held after the last reversal
+static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t sinceReversalUs)
+{
+    static FAST_DATA_ZERO_INIT bool released;
+    const flight3DConfig_t *cfg = flight3DConfig();
+    bool restarted = false;
+
+#ifdef USE_DSHOT_TELEMETRY
+    if (isDshotTelemetryActive()) {
+        // tracked every loop so the plausibility filter stays current
+        restarted = iterm3dAllMotorsRestarted(reversed, currentTimeUs) && iterm3dErpmAverage > 0.0f;
+    }
+#endif
+
+    if (reversed) {
+        released = false;
+    }
+    if (!released) {
+        const bool rpmRelease = cfg->iterm_release3d == ITERM_3D_RELEASE_RPM && restarted
+            && sinceReversalUs >= cfg->iterm_min_ms3d * 1000;
+        released = rpmRelease || sinceReversalUs >= cfg->iterm_reset_ms3d * 1000;
+    }
+    return !released;
+}
+
+static bool iterm3dAxisUsesMemory(uint8_t axes, int axis)
+{
+    switch (axes) {
+    case ITERM_3D_AXES_PITCH:
+        return axis == FD_PITCH;
+    case ITERM_3D_AXES_ROLL_PITCH:
+        return axis != FD_YAW;
+    default:
+        return true;
+    }
+}
+
+static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs)
+{
+    const flight3DConfig_t *cfg = flight3DConfig();
+    const uint8_t mode = cfg->iterm_mode3d;
+    const int dir = motorOutputMixSign < 0 ? 1 : 0;
+    // learn only in steady flight: flying, past the hold, mix not saturated
+    const bool flying = ARMING_FLAG(ARMED) && (isAirmodeActivated() || calculateThrottleStatus() != THROTTLE_LOW);
+    const bool learn = flying && !hold && getMotorMixRange() < 1.0f;
+
+    if (mode == ITERM_3D_PER_DIRECTION && ARMING_FLAG(ARMED)) {
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            const bool useMemory = iterm3dAxisUsesMemory(cfg->iterm_axes3d, axis);
             if (reversed) {
-                // start the new direction from its own remembered trim
-                pidData[axis].I = iterm3dMemory[dir][axis];
-            } else if (!inWindow) {
+                // start the new direction from its own remembered trim (other axes start from zero, like stock)
+                pidData[axis].I = useMemory ? iterm3dMemory[dir][axis] : 0.0f;
+            } else if (learn && useMemory) {
                 iterm3dMemory[dir][axis] += mixerRuntime.iterm3dMemoryK * (pidData[axis].I - iterm3dMemory[dir][axis]);
             }
         }
     }
 
+#ifdef USE_DSHOT_TELEMETRY
+    if (learn && isDshotTelemetryActive()) {
+        float erpmSum = 0.0f;
+        for (int i = 0; i < mixerRuntime.motorCount; i++) {
+            erpmSum += iterm3dErpm[i];
+        }
+        iterm3dErpmAverage += mixerRuntime.iterm3dRpmAverageK * (erpmSum / mixerRuntime.motorCount - iterm3dErpmAverage);
+    }
+#endif
+
     if (mode == ITERM_3D_RESET) {
         pidSetItermFreeze3d(false);
-        if (inWindow) {
+        if (hold) {
             pidResetIterm();
         }
     } else {
         // props have little authority while crossing zero rpm, don't wind up
-        pidSetItermFreeze3d(inWindow);
+        pidSetItermFreeze3d(hold);
     }
 
     DEBUG_SET(DEBUG_3D_ITERM, 0, motorOutputMixSign);
-    DEBUG_SET(DEBUG_3D_ITERM, 1, inWindow);
+    DEBUG_SET(DEBUG_3D_ITERM, 1, hold ? MAX(1, sinceReversalUs / 1000) : 0); // ms since reversal while holding
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
         DEBUG_SET(DEBUG_3D_ITERM, 2 + axis, lrintf(iterm3dMemory[0][axis] * 10.0f));
         DEBUG_SET(DEBUG_3D_ITERM, 5 + axis, lrintf(iterm3dMemory[1][axis] * 10.0f));
@@ -251,8 +346,9 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             throttle = 0;
             currentThrottleInputRange = rcCommandThrottleRange3dHigh;
         }
-        const timeUs_t itermWindowUs = flight3DConfig()->iterm_reset_ms3d * 1000U;
-        update3dIterm(motorOutputMixSign != previousMixSign, currentTimeUs - reversalTimeUs < itermWindowUs);
+        const bool reversed = motorOutputMixSign != previousMixSign;
+        const timeDelta_t sinceReversalUs = cmpTimeUs(currentTimeUs, reversalTimeUs);
+        update3dIterm(reversed, iterm3dHold(reversed, currentTimeUs, sinceReversalUs), sinceReversalUs);
     } else {
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         currentThrottleInputRange = PWM_RANGE;

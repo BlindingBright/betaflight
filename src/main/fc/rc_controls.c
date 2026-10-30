@@ -100,6 +100,11 @@ PG_RESET_TEMPLATE(flight3DConfig_t, flight3DConfig,
     .switched_mode3d = false,
     .iterm_reset_ms3d = 250,
     .iterm_mode3d = ITERM_3D_RESET,
+    .iterm_min_ms3d = 50,
+    .iterm_release3d = ITERM_3D_RELEASE_TIME,
+    .iterm_rpm_pct3d = 40,
+    .iterm_learn_hz_x10 = 15,
+    .iterm_axes3d = ITERM_3D_AXES_ALL,
 );
 
 bool isUsingSticksForArming(void)

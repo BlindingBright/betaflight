@@ -1411,6 +1411,11 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE("3d_deadband_throttle", "%d",            flight3DConfig()->deadband3d_throttle);
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_mode", "%s",                   lookupTableIterm3dMode[flight3DConfig()->iterm_mode3d]);
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_reset_ms", "%d",               flight3DConfig()->iterm_reset_ms3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_min_ms", "%d",                 flight3DConfig()->iterm_min_ms3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_release", "%s",                lookupTableIterm3dRelease[flight3DConfig()->iterm_release3d]);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_rpm_pct", "%d",                flight3DConfig()->iterm_rpm_pct3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_learn_hz_x10", "%d",           flight3DConfig()->iterm_learn_hz_x10);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_axes", "%s",                   lookupTableIterm3dAxes[flight3DConfig()->iterm_axes3d]);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_THRESHOLD, "%d",   currentPidProfile->ez_landing_threshold);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_LIMIT, "%d",       currentPidProfile->ez_landing_limit);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_SPEED, "%d",       currentPidProfile->ez_landing_speed);

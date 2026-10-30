@@ -98,6 +98,8 @@ typedef enum {
 #endif
     TABLE_THROTTLE_LIMIT_TYPE,
     TABLE_ITERM_3D_MODE,
+    TABLE_ITERM_3D_RELEASE,
+    TABLE_ITERM_3D_AXES,
 #if defined(USE_VIDEO_SYSTEM)
     TABLE_VIDEO_SYSTEM,
 #endif
@@ -282,3 +284,5 @@ extern const char * const lookupTableCMSMenuBackgroundType[];
 
 extern const char * const lookupTableThrottleLimitType[];
 extern const char * const lookupTableIterm3dMode[];
+extern const char * const lookupTableIterm3dRelease[];
+extern const char * const lookupTableIterm3dAxes[];
