@@ -1416,6 +1416,7 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_rpm_pct", "%d",                flight3DConfig()->iterm_rpm_pct3d);
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_learn_hz_x10", "%d",           flight3DConfig()->iterm_learn_hz_x10);
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_axes", "%s",                   lookupTableIterm3dAxes[flight3DConfig()->iterm_axes3d]);
+        BLACKBOX_PRINT_HEADER_LINE("3d_iterm_learn_thr", "%d",              flight3DConfig()->iterm_learn_thr3d);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_THRESHOLD, "%d",   currentPidProfile->ez_landing_threshold);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_LIMIT, "%d",       currentPidProfile->ez_landing_limit);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_SPEED, "%d",       currentPidProfile->ez_landing_speed);

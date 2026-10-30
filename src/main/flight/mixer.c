@@ -125,16 +125,12 @@ static FAST_DATA_ZERO_INIT uint8_t iterm3dMotorRestarted;                 // bit
 
 // eRPM is unsigned, so a motor counts as restarted only after it has dropped below the threshold
 // (props crossing zero) and then climbed back above it
-static bool iterm3dAllMotorsRestarted(bool reversed, timeUs_t currentTimeUs)
+static bool iterm3dAllMotorsRestarted(timeUs_t currentTimeUs)
 {
     const int motorCount = mixerRuntime.motorCount;
     const float threshold = iterm3dErpmAverage * flight3DConfig()->iterm_rpm_pct3d * 0.01f;
     const float maxRisePerUs = iterm3dErpmAverage * ITERM_3D_MAX_ERPM_RISE_PER_S * 1e-6f;
 
-    if (reversed) {
-        iterm3dMotorLow = 0;
-        iterm3dMotorRestarted = 0;
-    }
     for (int i = 0; i < motorCount; i++) {
         const float erpm = getDshotErpm(i);
         const timeDelta_t sinceUs = cmpTimeUs(currentTimeUs, iterm3dErpmUs[i]);
@@ -163,9 +159,14 @@ static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t since
     bool restarted = false;
 
 #ifdef USE_DSHOT_TELEMETRY
+    if (reversed) {
+        // always, so a telemetry dropout at the reversal can't carry over the previous flip's restarts
+        iterm3dMotorLow = 0;
+        iterm3dMotorRestarted = 0;
+    }
     if (isDshotTelemetryActive()) {
         // tracked every loop so the plausibility filter stays current
-        restarted = iterm3dAllMotorsRestarted(reversed, currentTimeUs) && iterm3dErpmAverage > 0.0f;
+        restarted = iterm3dAllMotorsRestarted(currentTimeUs) && iterm3dErpmAverage > 0.0f;
     }
 #endif
 
@@ -192,14 +193,15 @@ static bool iterm3dAxisUsesMemory(uint8_t axes, int axis)
     }
 }
 
-static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs)
+static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs, float directionThrottle)
 {
     const flight3DConfig_t *cfg = flight3DConfig();
     const uint8_t mode = cfg->iterm_mode3d;
     const int dir = motorOutputMixSign < 0 ? 1 : 0;
-    // learn only in steady flight: flying, past the hold, mix not saturated
+    // learn only in steady flight: flying, past the hold, mix not saturated, and not on the approach to center
+    // (with little throttle, I-term swings with the deceleration and anti-gravity instead of holding the trim)
     const bool flying = ARMING_FLAG(ARMED) && (isAirmodeActivated() || calculateThrottleStatus() != THROTTLE_LOW);
-    const bool learn = flying && !hold && getMotorMixRange() < 1.0f;
+    const bool learn = flying && !hold && getMotorMixRange() < 1.0f && directionThrottle >= cfg->iterm_learn_thr3d * 0.01f;
 
     if (mode == ITERM_3D_PER_DIRECTION && ARMING_FLAG(ARMED)) {
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
@@ -348,7 +350,8 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         }
         const bool reversed = motorOutputMixSign != previousMixSign;
         const timeDelta_t sinceReversalUs = cmpTimeUs(currentTimeUs, reversalTimeUs);
-        update3dIterm(reversed, iterm3dHold(reversed, currentTimeUs, sinceReversalUs), sinceReversalUs);
+        update3dIterm(reversed, iterm3dHold(reversed, currentTimeUs, sinceReversalUs), sinceReversalUs,
+            currentThrottleInputRange > 0.0f ? throttle / currentThrottleInputRange : 0.0f);
     } else {
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         currentThrottleInputRange = PWM_RANGE;
