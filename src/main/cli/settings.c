@@ -391,6 +391,10 @@ const char * const lookupTableIterm3dAxes[] = {
     "ALL", "PITCH", "ROLL_PITCH"
 };
 
+const char * const lookupTableIterm3dLoad[] = {
+    "FLIP", "RELEASE"
+};
+
 #ifdef USE_GPS_RESCUE
 static const char * const lookupTableRescueSanityType[] = {
     "RESCUE_SANITY_OFF", "RESCUE_SANITY_ON", "RESCUE_SANITY_FS_ONLY"
@@ -618,6 +622,7 @@ const lookupTableEntry_t lookupTables[] = {
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dMode),
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dRelease),
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dAxes),
+    LOOKUP_TABLE_ENTRY(lookupTableIterm3dLoad),
 #if defined(USE_VIDEO_SYSTEM)
     LOOKUP_TABLE_ENTRY(lookupTableVideoSystem),
 #endif
@@ -989,6 +994,7 @@ const clivalue_t valueTable[] = {
     { "3d_iterm_axes",              VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_3D_AXES }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_axes3d) },
     { "3d_iterm_learn_thr",         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 150 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_learn_thr3d) },
     { "3d_iterm_max_ms",            VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 50, 1000 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_max_ms3d) },
+    { "3d_iterm_load",              VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_3D_LOAD }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_load3d) },
 
 // PG_SERVO_CONFIG
 #ifdef USE_SERVOS

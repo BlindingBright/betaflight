@@ -107,6 +107,7 @@ PG_RESET_TEMPLATE(flight3DConfig_t, flight3DConfig,
     .iterm_axes3d = ITERM_3D_AXES_ALL,
     .iterm_learn_thr3d = 50,
     .iterm_max_ms3d = 400,
+    .iterm_load3d = ITERM_3D_LOAD_FLIP,
 );
 
 bool isUsingSticksForArming(void)

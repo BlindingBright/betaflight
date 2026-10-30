@@ -209,15 +209,23 @@ static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs,
     if (flying && !hold) {
         iterm3dThrottleAverage += mixerRuntime.iterm3dThrottleAverageK * (directionThrottle - iterm3dThrottleAverage);
     }
-    const bool learn = flying && !hold && getMotorMixRange() < 1.0f
-        && directionThrottle >= iterm3dThrottleAverage * cfg->iterm_learn_thr3d * 0.01f;
+    const bool steady = flying && !hold && getMotorMixRange() < 1.0f;
+    const bool learn = steady && directionThrottle >= iterm3dThrottleAverage * cfg->iterm_learn_thr3d * 0.01f;
+
+    static FAST_DATA_ZERO_INIT bool wasHolding;
+    const bool justReleased = wasHolding && !hold;
+    wasHolding = hold;
 
     if (mode == ITERM_3D_PER_DIRECTION && ARMING_FLAG(ARMED)) {
+        const bool loadAtRelease = cfg->iterm_load3d == ITERM_3D_LOAD_RELEASE;
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
             const bool useMemory = iterm3dAxisUsesMemory(cfg->iterm_axes3d, axis);
             if (reversed) {
-                // start the new direction from its own remembered trim (other axes start from zero, like stock)
-                pidData[axis].I = useMemory ? iterm3dMemory[dir][axis] : 0.0f;
+                // start the new direction from its own remembered trim (other axes start from zero, like stock);
+                // with LOAD_RELEASE, stay at zero while the props restart and load once they have grip again
+                pidData[axis].I = (useMemory && !loadAtRelease) ? iterm3dMemory[dir][axis] : 0.0f;
+            } else if (justReleased && loadAtRelease && useMemory) {
+                pidData[axis].I = iterm3dMemory[dir][axis];
             } else if (learn && useMemory) {
                 iterm3dMemory[dir][axis] += mixerRuntime.iterm3dMemoryK * (pidData[axis].I - iterm3dMemory[dir][axis]);
             }
@@ -225,7 +233,8 @@ static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs,
     }
 
 #ifdef USE_DSHOT_TELEMETRY
-    if (learn && isDshotTelemetryActive()) {
+    // the eRPM reference uses all steady flight, not only the throttle range the memory learns from
+    if (steady && isDshotTelemetryActive()) {
         float erpmSum = 0.0f;
         for (int i = 0; i < mixerRuntime.motorCount; i++) {
             erpmSum += iterm3dErpm[i];

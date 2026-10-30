@@ -134,6 +134,11 @@ typedef enum {
     ITERM_3D_AXES_ROLL_PITCH,
 } iterm3dAxes_e;
 
+typedef enum {
+    ITERM_3D_LOAD_FLIP = 0,     // load the new direction's memory at the reversal, hold it frozen while the props restart
+    ITERM_3D_LOAD_RELEASE,      // hold I-term at zero while the props restart (like stock), load the memory at release
+} iterm3dLoad_e;
+
 typedef struct flight3DConfig_s {
     uint16_t deadband3d_low;                // min 3d value
     uint16_t deadband3d_high;               // max 3d value
@@ -152,6 +157,7 @@ typedef struct flight3DConfig_s {
     uint8_t iterm_axes3d;                   // iterm3dAxes_e: axes that use the per-direction memory
     uint8_t iterm_learn_thr3d;              // memory learns only above this % of the average in-flight throttle (not on the approach to center)
     uint16_t iterm_max_ms3d;                // RPM release: longest I-term hold (fallback if a restart isn't seen)
+    uint8_t iterm_load3d;                   // iterm3dLoad_e: when the per-direction memory is applied
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);
