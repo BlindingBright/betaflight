@@ -987,7 +987,8 @@ const clivalue_t valueTable[] = {
     { "3d_iterm_rpm_pct",           VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 10, 90 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_rpm_pct3d) },
     { "3d_iterm_learn_hz_x10",      VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 1, 50 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_learn_hz_x10) },
     { "3d_iterm_axes",              VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_3D_AXES }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_axes3d) },
-    { "3d_iterm_learn_thr",         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 90 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_learn_thr3d) },
+    { "3d_iterm_learn_thr",         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 150 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_learn_thr3d) },
+    { "3d_iterm_max_ms",            VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 50, 1000 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_max_ms3d) },
 
 // PG_SERVO_CONFIG
 #ifdef USE_SERVOS

@@ -26,6 +26,8 @@
 
 // 3D RPM release: slow average of in-flight motor eRPM, the reference for "this motor has restarted"
 #define ITERM_3D_RPM_AVERAGE_CUTOFF_HZ 0.5f
+// 3D memory learning: slow average of the per-direction throttle, the reference for the learning gate
+#define ITERM_3D_THROTTLE_AVERAGE_CUTOFF_HZ 0.2f
 
 typedef struct mixerRuntime_s {
     uint8_t motorCount;
@@ -36,6 +38,7 @@ typedef struct mixerRuntime_s {
     bool feature3dEnabled;
     float iterm3dMemoryK;               // PT1 gain of the per-direction I-term memory
     float iterm3dRpmAverageK;           // PT1 gain of the in-flight eRPM average (RPM release)
+    float iterm3dThrottleAverageK;      // PT1 gain of the in-flight per-direction throttle average
     float motorOutputLow;
     float motorOutputHigh;
     float disarmMotorOutput;

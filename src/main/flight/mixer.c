@@ -110,6 +110,7 @@ static FAST_DATA_ZERO_INIT int8_t motorOutputMixSign;
 
 // per-direction I-term memory: [0] normal, [1] inverted motor direction. Kept across disarms, cleared on reboot.
 static FAST_DATA_ZERO_INIT float iterm3dMemory[2][XYZ_AXIS_COUNT];
+static FAST_DATA_ZERO_INIT float iterm3dThrottleAverage;    // per-direction throttle while flying (0..1)
 
 #ifdef USE_DSHOT_TELEMETRY
 // RPM release: per-motor restart detection after a 3D reversal (eRPM in telemetry units of 100)
@@ -174,9 +175,12 @@ static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t since
         released = false;
     }
     if (!released) {
-        const bool rpmRelease = cfg->iterm_release3d == ITERM_3D_RELEASE_RPM && restarted
-            && sinceReversalUs >= cfg->iterm_min_ms3d * 1000;
-        released = rpmRelease || sinceReversalUs >= cfg->iterm_reset_ms3d * 1000;
+        if (cfg->iterm_release3d == ITERM_3D_RELEASE_RPM) {
+            // as soon as every motor has restarted, within [min, max]; bigger props restart slower, so the cap is separate
+            released = (restarted && sinceReversalUs >= cfg->iterm_min_ms3d * 1000) || sinceReversalUs >= cfg->iterm_max_ms3d * 1000;
+        } else {
+            released = sinceReversalUs >= cfg->iterm_reset_ms3d * 1000;
+        }
     }
     return !released;
 }
@@ -199,9 +203,14 @@ static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs,
     const uint8_t mode = cfg->iterm_mode3d;
     const int dir = motorOutputMixSign < 0 ? 1 : 0;
     // learn only in steady flight: flying, past the hold, mix not saturated, and not on the approach to center
-    // (with little throttle, I-term swings with the deceleration and anti-gravity instead of holding the trim)
+    // (with little throttle, I-term swings with the deceleration and anti-gravity instead of holding the trim).
+    // "Little throttle" is relative to this quad's own average, so it works for any size / power-to-weight.
     const bool flying = ARMING_FLAG(ARMED) && (isAirmodeActivated() || calculateThrottleStatus() != THROTTLE_LOW);
-    const bool learn = flying && !hold && getMotorMixRange() < 1.0f && directionThrottle >= cfg->iterm_learn_thr3d * 0.01f;
+    if (flying && !hold) {
+        iterm3dThrottleAverage += mixerRuntime.iterm3dThrottleAverageK * (directionThrottle - iterm3dThrottleAverage);
+    }
+    const bool learn = flying && !hold && getMotorMixRange() < 1.0f
+        && directionThrottle >= iterm3dThrottleAverage * cfg->iterm_learn_thr3d * 0.01f;
 
     if (mode == ITERM_3D_PER_DIRECTION && ARMING_FLAG(ARMED)) {
         for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {

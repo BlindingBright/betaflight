@@ -150,7 +150,8 @@ typedef struct flight3DConfig_s {
     uint8_t iterm_rpm_pct3d;                // RPM release: restart threshold, % of the average in-flight eRPM
     uint8_t iterm_learn_hz_x10;             // per-direction memory learning rate, 0.1 Hz units
     uint8_t iterm_axes3d;                   // iterm3dAxes_e: axes that use the per-direction memory
-    uint8_t iterm_learn_thr3d;              // memory learns only above this per-direction throttle (%), not on the approach to center
+    uint8_t iterm_learn_thr3d;              // memory learns only above this % of the average in-flight throttle (not on the approach to center)
+    uint16_t iterm_max_ms3d;                // RPM release: longest I-term hold (fallback if a restart isn't seen)
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);
