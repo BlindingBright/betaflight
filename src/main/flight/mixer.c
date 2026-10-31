@@ -426,11 +426,15 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         antiGravity3dReversed = reversed;
         antiGravity3dHolding = hold;
 
+        // both adjustments are fractions of the current direction's full band, like 2D (motorOutputRange is negative for
+        // reverse on non-DShot protocols)
+        const float bandRange3d = motorOutputRange;
+
 #if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
-        // 3D sag compensation: take the same fraction off the top of the current direction's range as stock does in 2D
-        // (stock skips it in 3D). The idle end stays; motorOutputRange is negative for reverse on non-DShot protocols.
+        // 3D sag compensation: take the same fraction off the top of the current direction's band as stock does in 2D
+        // (stock skips it in 3D). The idle end stays.
         if (!isFlipOverAfterCrashActive()) {
-            motorOutputRange *= 1.0f - vbatSagAttenuation();
+            motorOutputRange = bandRange3d * (1.0f - vbatSagAttenuation());
             if (motorOutputRange > 0.0f) {
                 motorRangeMax = motorOutputMin + motorOutputRange;
             } else {
@@ -445,8 +449,9 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         // DShot only: both directions then run from motorOutputMin (idle) upwards.
         if (flight3DConfig()->dyn_idle3d && mixerRuntime.dynIdleMinRps > 0.0f && isMotorProtocolDshot()) {
             motorRangeMinIncrease = dynIdleIncrease();
-            motorOutputMin += motorRangeMinIncrease * motorOutputRange;
-            motorOutputRange *= 1.0f - motorRangeMinIncrease;
+            const float top = motorOutputMin + motorOutputRange;
+            motorOutputMin += motorRangeMinIncrease * bandRange3d;
+            motorOutputRange = top - motorOutputMin;
             motorRangeMin = motorOutputMin;
         }
 #endif

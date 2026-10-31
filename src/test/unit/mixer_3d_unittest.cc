@@ -522,12 +522,13 @@ TEST(Mixer3dTest, sagWithDynIdleStaysInBand)
 {
     // both on, motors stopped (dyn idle saturated) and battery full: idle raised, top held back, everything in band
     setupSag(420, true);
-    setThrottle(1470);
+    setThrottle(1497);                          // reverse, zero throttle: the motors sit at (raised) idle
     runLoops(20, 20000);
     runLoops(200, 0);
     const float f = 70.0f / 420.0f;
     const float top = (DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - f * ((DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - reverseIdle());
-    EXPECT_GT(minMotor(), reverseIdle() + 50.0f);
+    // like 2D, both are fractions of the full band: idle + 10% (dyn_idle_max_increase) of it, top - 16.7% of it
+    EXPECT_NEAR(minMotor(), reverseIdle() + 0.10f * ((DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - reverseIdle()), 1.0f);
     EXPECT_LE(maxMotor(), top + 0.6f);
     setThrottle(1000);
     runLoops(1, 0);

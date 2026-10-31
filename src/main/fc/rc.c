@@ -151,12 +151,27 @@ float getMaxRcDeflectionAbs(void)
 
 #define THROTTLE_LOOKUP_LENGTH 12
 static int16_t lookupThrottleRC[THROTTLE_LOOKUP_LENGTH];    // lookup table for expo & mid THROTTLE
+static int16_t lookupThrottleRC3d[THROTTLE_LOOKUP_LENGTH];  // normal 3D: same expo, midpoint at stick center (zero thrust)
 
-static int16_t rcLookupThrottle(int32_t tmp)
+static int16_t rcLookupThrottle(const int16_t *lookup, int32_t tmp)
 {
     const int32_t tmp2 = tmp / 100;
     // [0;1000] -> expo -> [MINTHROTTLE;MAXTHROTTLE]
-    return lookupThrottleRC[tmp2] + (tmp - tmp2 * 100) * (lookupThrottleRC[tmp2 + 1] - lookupThrottleRC[tmp2]) / 100;
+    return lookup[tmp2] + (tmp - tmp2 * 100) * (lookup[tmp2 + 1] - lookup[tmp2]) / 100;
+}
+
+static void generateThrottleCurve(int16_t *lookup, uint8_t thrMid8)
+{
+    for (int i = 0; i < THROTTLE_LOOKUP_LENGTH; i++) {
+        const int16_t tmp = 10 * i - thrMid8;
+        uint8_t y = 1;
+        if (tmp > 0)
+            y = 100 - thrMid8;
+        if (tmp < 0)
+            y = thrMid8;
+        lookup[i] = 10 * thrMid8 + tmp * (100 - currentControlRateProfile->thrExpo8 + (int32_t) currentControlRateProfile->thrExpo8 * (tmp * tmp) / (y * y)) / 10;
+        lookup[i] = PWM_RANGE_MIN + PWM_RANGE * lookup[i] / 1000; // [MINTHROTTLE;MAXTHROTTLE]
+    }
 }
 
 #define SETPOINT_RATE_LIMIT_MIN -1998.0f
@@ -719,16 +734,19 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
         tmp = (uint32_t)(tmp - rxConfig()->mincheck) * PWM_RANGE_MIN / (PWM_RANGE_MAX - rxConfig()->mincheck);
     }
 
+    // normal 3D: stick center is zero thrust, the bottom is full reverse (not 3D switched mode, 3D mode switch off)
+    const bool normal3d = featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d && !IS_RC_MODE_ACTIVE(BOX3D);
+
     if (getLowVoltageCutoff()->enabled) {
-        if (featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d && !IS_RC_MODE_ACTIVE(BOX3D)) {
-            // normal 3D: scale toward stick center (zero thrust); scaling toward 0 would be full reverse
+        if (normal3d) {
+            // scale toward stick center (zero thrust); scaling toward 0 would be full reverse
             tmp = lowVoltageCutoffThrottle3d(tmp, getLowVoltageCutoff()->percentage);
         } else {
             tmp = tmp * getLowVoltageCutoff()->percentage / 100;
         }
     }
 
-    rcCommand[THROTTLE] = rcLookupThrottle(tmp);
+    rcCommand[THROTTLE] = rcLookupThrottle(normal3d ? lookupThrottleRC3d : lookupThrottleRC, tmp);
 
     if (featureIsEnabled(FEATURE_3D) && !failsafeIsActive()) {
         if (!flight3DConfig()->switched_mode3d) {
@@ -783,19 +801,9 @@ void initRcProcessing(void)
     rcCommandDivider = 500.0f - rcControlsConfig()->deadband;
     rcCommandYawDivider = 500.0f - rcControlsConfig()->yaw_deadband;
 
+    generateThrottleCurve(lookupThrottleRC, currentControlRateProfile->thrMid8);
     // normal 3D: the curve's midpoint is stick center (zero thrust), so it stays there whatever thr_mid is
-    const uint8_t thrMid8 = (featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d)
-        ? throttleCurveMid3d(currentControlRateProfile->thrMid8) : currentControlRateProfile->thrMid8;
-    for (int i = 0; i < THROTTLE_LOOKUP_LENGTH; i++) {
-        const int16_t tmp = 10 * i - thrMid8;
-        uint8_t y = 1;
-        if (tmp > 0)
-            y = 100 - thrMid8;
-        if (tmp < 0)
-            y = thrMid8;
-        lookupThrottleRC[i] = 10 * thrMid8 + tmp * (100 - currentControlRateProfile->thrExpo8 + (int32_t) currentControlRateProfile->thrExpo8 * (tmp * tmp) / (y * y)) / 10;
-        lookupThrottleRC[i] = PWM_RANGE_MIN + PWM_RANGE * lookupThrottleRC[i] / 1000; // [MINTHROTTLE;MAXTHROTTLE]
-    }
+    generateThrottleCurve(lookupThrottleRC3d, throttleCurveMid3d(currentControlRateProfile->thrMid8));
 
     switch (currentControlRateProfile->rates_type) {
     case RATES_TYPE_BETAFLIGHT:
