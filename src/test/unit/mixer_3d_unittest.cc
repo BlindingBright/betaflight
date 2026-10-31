@@ -52,6 +52,7 @@ extern "C" {
 extern "C" {
     #include "io/gps.h"
     #include "pg/rpm_filter.h"
+    #include "sensors/battery.h"
     #include "flight/failsafe.h"
     #include "flight/mixer_tricopter.h"
     #include "fc/core.h"
@@ -62,6 +63,7 @@ extern "C" {
     PG_REGISTER(motorConfig_t, motorConfig, PG_MOTOR_CONFIG, 0);
     PG_REGISTER(rxConfig_t, rxConfig, PG_RX_CONFIG, 0);
     PG_REGISTER(rpmFilterConfig_t, rpmFilterConfig, PG_RPM_FILTER_CONFIG, 0);
+    PG_REGISTER(batteryConfig_t, batteryConfig, PG_BATTERY_CONFIG, 0);
 
     uint8_t debugMode;
     int16_t debug[DEBUG16_VALUE_COUNT];
@@ -82,6 +84,8 @@ extern "C" {
     static bool testFeature3d = true;
     static bool testDshot = true;
     static float testDT = 1.0f / 8000.0f;
+    static uint16_t testSagCellVoltage = 380;
+    uint16_t getBatterySagCellVoltage(void) { return testSagCellVoltage; }
     static bool testAntiGravityReversed, testAntiGravityHolding, testAntiGravityApproaching;
 
     bool featureIsEnabled(uint32_t mask) { return mask == FEATURE_3D ? testFeature3d : false; }
@@ -190,6 +194,9 @@ static void setup(bool dynIdle3d, uint8_t dynIdleMinRpm)
     memset(&testPidProfile, 0, sizeof(testPidProfile));
     testPidProfile.pidSumLimit = 500;
     testPidProfile.motor_output_limit = 100;
+    testPidProfile.vbat_sag_compensation = 0;
+    batteryConfigMutable()->vbatwarningcellvoltage = 350;
+    testSagCellVoltage = 380;
     testPidProfile.pidSumLimitYaw = 400;
     testPidProfile.dyn_idle_min_rpm = dynIdleMinRpm;
     testPidProfile.dyn_idle_p_gain = 50;
@@ -462,4 +469,67 @@ TEST(Mixer3dTest, dynIdleSlowFallNearTarget)
     const float saturated = mixerRuntime.dynIdleI;
     runLoops(400, 5600);                        // 50 ms at 5600 rpm: 12% above the 5000 rpm target
     EXPECT_GT(mixerRuntime.dynIdleI, saturated * 0.95f);
+}
+
+static void setupSag(uint16_t cellVoltage, bool dynIdle)
+{
+    setup(dynIdle, dynIdle ? 50 : 0);
+    testPidProfile.vbat_sag_compensation = 100;
+    testSagCellVoltage = cellVoltage;
+    mixerInitProfile();
+}
+
+TEST(Mixer3dTest, sagCapsTopOfBothDirectionsWhenFull)
+{
+    // full battery (4.20 V/cell), vbat_sag_compensation 100, warning 3.50 V: the top 70/420 = 16.7% of each band is held back
+    const float f = 70.0f / 420.0f;
+    setupSag(420, false);
+    setThrottle(2000);
+    runLoops(20, 20000);
+    EXPECT_NEAR(maxMotor(), DSHOT_MAX_THROTTLE - f * (DSHOT_MAX_THROTTLE - forwardIdle()), 1.0f);
+    setThrottle(1000);
+    runLoops(4000, 20000);
+    EXPECT_EQ(-1, motorDirection());
+    EXPECT_NEAR(maxMotor(), (DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - f * ((DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - reverseIdle()), 1.0f);
+}
+
+TEST(Mixer3dTest, sagNoCapWhenBatteryLow)
+{
+    setupSag(350, false);                       // at the warning voltage: nothing held back
+    setThrottle(2000);
+    runLoops(20, 20000);
+    EXPECT_NEAR(maxMotor(), DSHOT_MAX_THROTTLE, 0.6f);
+    setThrottle(1000);
+    runLoops(4000, 20000);
+    EXPECT_NEAR(maxMotor(), DSHOT_3D_FORWARD_MIN_THROTTLE - 1, 0.6f);
+}
+
+TEST(Mixer3dTest, sagLeavesIdleAndHalfwayScales)
+{
+    setupSag(385, false);                       // halfway between 4.20 and 3.50: half the cap
+    const float f = 0.5f * 70.0f / 420.0f;
+    setThrottle(1700);
+    runLoops(20, 20000);
+    const float fwd = (motor[0] - forwardIdle()) / (DSHOT_MAX_THROTTLE - forwardIdle());
+    EXPECT_NEAR(fwd, (1.0f - f) * 197.0f / 497.0f, 0.01f);
+    setThrottle(1501);                          // centre stick: exact idle, sag compensation never touches the bottom
+    runLoops(20, 20000);
+    EXPECT_NEAR(minMotor(), forwardIdle(), 0.6f);
+    EXPECT_NEAR(maxMotor(), forwardIdle(), 0.6f);
+}
+
+TEST(Mixer3dTest, sagWithDynIdleStaysInBand)
+{
+    // both on, motors stopped (dyn idle saturated) and battery full: idle raised, top held back, everything in band
+    setupSag(420, true);
+    setThrottle(1470);
+    runLoops(20, 20000);
+    runLoops(200, 0);
+    const float f = 70.0f / 420.0f;
+    const float top = (DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - f * ((DSHOT_3D_FORWARD_MIN_THROTTLE - 1) - reverseIdle());
+    EXPECT_GT(minMotor(), reverseIdle() + 50.0f);
+    EXPECT_LE(maxMotor(), top + 0.6f);
+    setThrottle(1000);
+    runLoops(1, 0);
+    EXPECT_NEAR(maxMotor(), top, 1.0f);         // full reverse reaches the held-back top, not past it
 }

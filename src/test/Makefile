@@ -200,7 +200,8 @@ mixer_3d_unittest_SRC := \
 mixer_3d_unittest_DEFINES := \
 		USE_DSHOT= \
 		USE_DSHOT_TELEMETRY= \
-		USE_DYN_IDLE=
+		USE_DYN_IDLE= \
+		USE_BATTERY_VOLTAGE_SAG_COMPENSATION=
 
 rc_3d_unittest_SRC := \
 		$(USER_DIR)/common/maths.c

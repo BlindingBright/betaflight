@@ -291,6 +291,25 @@ static float dynIdleIncrease(void)
 }
 #endif
 
+#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
+// vbat_sag_compensation: fraction to take off the top of the motor range while the battery is full, so thrust stays the
+// same as it sags
+static float vbatSagAttenuation(void)
+{
+    float motorRangeAttenuationFactor = 0;
+    // reduce motorRangeMax when battery is full
+    if (mixerRuntime.vbatSagCompensationFactor > 0.0f) {
+        const uint16_t currentCellVoltage = getBatterySagCellVoltage();
+        // batteryGoodness = 1 when voltage is above vbatFull, and 0 when voltage is below vbatLow
+        float batteryGoodness = 1.0f - constrainf((mixerRuntime.vbatFull - currentCellVoltage) / mixerRuntime.vbatRangeToCompensate, 0.0f, 1.0f);
+        motorRangeAttenuationFactor = (mixerRuntime.vbatRangeToCompensate / mixerRuntime.vbatFull) * batteryGoodness * mixerRuntime.vbatSagCompensationFactor;
+        DEBUG_SET(DEBUG_BATTERY, 2, lrintf(batteryGoodness * 100));
+        DEBUG_SET(DEBUG_BATTERY, 3, lrintf(motorRangeAttenuationFactor * 1000));
+    }
+    return motorRangeAttenuationFactor;
+}
+#endif
+
 static FAST_DATA_ZERO_INIT bool antiGravity3dReversed;
 static FAST_DATA_ZERO_INIT bool antiGravity3dHolding;
 
@@ -407,6 +426,19 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         antiGravity3dReversed = reversed;
         antiGravity3dHolding = hold;
 
+#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
+        // 3D sag compensation: take the same fraction off the top of the current direction's range as stock does in 2D
+        // (stock skips it in 3D). The idle end stays; motorOutputRange is negative for reverse on non-DShot protocols.
+        if (!isFlipOverAfterCrashActive()) {
+            motorOutputRange *= 1.0f - vbatSagAttenuation();
+            if (motorOutputRange > 0.0f) {
+                motorRangeMax = motorOutputMin + motorOutputRange;
+            } else {
+                motorRangeMin = motorOutputMin + motorOutputRange;
+            }
+        }
+#endif
+
 #if defined(USE_DYN_IDLE) && defined(USE_DSHOT)
         // 3D dynamic idle: raise the idle of the current direction. Right after a reversal the slowest motor is near zero rpm,
         // so this also gives the restarting motors more command, which shortens the spin-up in the new direction.
@@ -426,16 +458,7 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 #endif
 
 #if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
-        float motorRangeAttenuationFactor = 0;
-        // reduce motorRangeMax when battery is full
-        if (mixerRuntime.vbatSagCompensationFactor > 0.0f) {
-            const uint16_t currentCellVoltage = getBatterySagCellVoltage();
-            // batteryGoodness = 1 when voltage is above vbatFull, and 0 when voltage is below vbatLow
-            float batteryGoodness = 1.0f - constrainf((mixerRuntime.vbatFull - currentCellVoltage) / mixerRuntime.vbatRangeToCompensate, 0.0f, 1.0f);
-            motorRangeAttenuationFactor = (mixerRuntime.vbatRangeToCompensate / mixerRuntime.vbatFull) * batteryGoodness * mixerRuntime.vbatSagCompensationFactor;
-            DEBUG_SET(DEBUG_BATTERY, 2, lrintf(batteryGoodness * 100));
-            DEBUG_SET(DEBUG_BATTERY, 3, lrintf(motorRangeAttenuationFactor * 1000));
-        }
+        const float motorRangeAttenuationFactor = vbatSagAttenuation();
         motorRangeMax = isFlipOverAfterCrashActive() ? mixerRuntime.motorOutputHigh : mixerRuntime.motorOutputHigh - motorRangeAttenuationFactor * (mixerRuntime.motorOutputHigh - mixerRuntime.motorOutputLow);
 #else
         motorRangeMax = mixerRuntime.motorOutputHigh;
