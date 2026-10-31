@@ -7,7 +7,7 @@
 >
 > **Pilots: download, testing guide and log upload are on the project page:
 > [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
-> (44 ready-to-flash boards on the [v0.2.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.2.2-3d-test)).
+> (44 ready-to-flash boards on the [v0.3.0-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.0-3d-test)).
 >
 > Base: Betaflight 4.5.1 (`77d01ba3b`). Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
 > Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
@@ -21,9 +21,13 @@
 > | `3d_iterm_load` | `FLIP` / `RELEASE` | Load the learned I-term at the reversal or when the hold ends. |
 > | `3d_iterm_learn_thr`, `3d_iterm_learn_hz_x10` | 50 %, 0.5 Hz | Learning only in steady, unsaturated flight above 50 % of the quad's own average throttle, PT1 at 0.5 Hz. Memory persists across disarms. |
 > | `3d_iterm_axes` | `ALL` / `PITCH` / `ROLL_PITCH` | Axes that use the memory. |
+> | `3d_anti_gravity` | `STOCK` / `GATED` | `GATED`: the anti-gravity filter is reset at each reversal and ignores the throttle change while I-term is held, so a pass through center isn't a throttle chop. |
+> | `3d_ag_approach_pct` | 0 (off) … 50 | With `GATED`, also ignore the throttle falling below this % on the way into a reversal. |
+> | `3d_dyn_idle` | `OFF` / `ON` | Runs the dynamic idle controller in 3D (stock skips it) and raises the idle of the current motor direction (DShot); no 1 % zero-throttle offset; I falls fast once every motor is >25 % above `dyn_idle_min_rpm`. |
 > | `debug_mode = 3D_ITERM` | | [0] motor direction, [1] ms since reversal while holding (0 once released), [2-4] upright memory x10, [5-7] inverted memory x10 |
 >
-> The blackbox header records `3d_deadband_throttle` and all `3d_iterm_*` settings.
+> The blackbox header records `3d_deadband_throttle` and all `3d_*` settings. Unit tests: `src/test/unit/mixer_3d_unittest.cc`
+> (real mixer + DShot code, both motor directions) and `pid_unittest`.
 >
 > Build: `make CONFIG=<board>` with the [betaflight/config](https://github.com/betaflight/config) `4.5-config` branch in `src/config`.
 
