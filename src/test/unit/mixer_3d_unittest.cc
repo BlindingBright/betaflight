@@ -178,9 +178,6 @@ static void setup(bool dynIdle3d, uint8_t dynIdleMinRpm)
     flight3DConfigMutable()->iterm_learn_hz_x10 = 5;
     flight3DConfigMutable()->iterm_learn_thr3d = 50;
     flight3DConfigMutable()->ag_approach_pct3d = 0;
-    flight3DConfigMutable()->restart_sync3d = false;
-    flight3DConfigMutable()->restart_sync_ms3d = 45;
-    flight3DConfigMutable()->reverse_gain3d = 100;
     flight3DConfigMutable()->dyn_idle3d = dynIdle3d;
     motorConfigMutable()->digitalIdleOffsetValue = 150;   // dshot_idle_value 1.5%
     motorConfigMutable()->motorPoleCount = POLES;
@@ -430,70 +427,6 @@ TEST(Mixer3dTest, dynIdleQuickUnwind)
     EXPECT_NEAR(minMotor(), forwardIdle(), 0.6f);
 }
 
-static void flipWithRollPitch(void)
-{
-    pidData[FD_ROLL].Sum = 100.0f;
-    pidData[FD_PITCH].Sum = -60.0f;
-    pidData[FD_YAW].Sum = 40.0f;
-    setThrottle(1700);
-    runLoops(20, 20000);
-    setThrottle(1300);                          // reversal
-}
-
-static float motorSpread(void) { return maxMotor() - minMotor(); }
-
-TEST(Mixer3dTest, restartSyncFlattensMix)
-{
-    setup(false, 0);
-    flight3DConfigMutable()->restart_sync3d = true;
-    flipWithRollPitch();
-    for (int n = 0; n < 280; n++) {             // first 35 ms (8 kHz): before the 10 ms blend
-        runLoops(1, 20000);
-        ASSERT_EQ(-1, motorDirection());
-        EXPECT_NEAR(motorSpread(), 0.0f, 0.01f) << "loop " << n;
-    }
-    runLoops(40, 20000);                        // 40 ms: half blended
-    const float half = motorSpread();
-    runLoops(80, 20000);                        // 50 ms: full mix again
-    const float full = motorSpread();
-    EXPECT_GT(half, 1.0f);
-    EXPECT_GT(full, half);
-
-    // without restart sync the mix is there from the first loop after the reversal, with the same full spread
-    setup(false, 0);
-    flipWithRollPitch();
-    runLoops(1, 20000);
-    EXPECT_NEAR(motorSpread(), full, 0.5f);
-}
-
-TEST(Mixer3dTest, restartSyncOnlyAfterReversal)
-{
-    // no flat window during normal flight in one direction
-    setup(false, 0);
-    flight3DConfigMutable()->restart_sync3d = true;
-    pidData[FD_ROLL].Sum = 100.0f;
-    setThrottle(1700);
-    runLoops(800, 20000);                       // 100 ms after the arming direction change
-    EXPECT_GT(motorSpread(), 10.0f);
-}
-
-TEST(Mixer3dTest, reverseGainScalesMixOnlyReversed)
-{
-    float spread[2][2];                         // [gain 100, 120][forward, reverse]
-    for (int g = 0; g < 2; g++) {
-        setup(false, 0);
-        flight3DConfigMutable()->reverse_gain3d = g ? 120 : 100;
-        pidData[FD_ROLL].Sum = 60.0f;
-        setThrottle(1700);
-        runLoops(800, 20000);
-        spread[g][0] = motorSpread();
-        setThrottle(1300);
-        runLoops(4000, 20000);                  // past the I-term hold
-        spread[g][1] = motorSpread();
-    }
-    EXPECT_NEAR(spread[1][0], spread[0][0], 0.01f);          // forward unchanged
-    EXPECT_NEAR(spread[1][1], spread[0][1] * 1.2f, 0.5f);    // reverse mix x1.2
-}
 
 TEST(Mixer3dTest, antiGravityApproachFlag)
 {
