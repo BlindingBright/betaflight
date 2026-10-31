@@ -110,6 +110,10 @@ PG_RESET_TEMPLATE(flight3DConfig_t, flight3DConfig,
     .iterm_load3d = ITERM_3D_LOAD_FLIP,
     .dyn_idle3d = false,
     .anti_gravity3d = ANTI_GRAVITY_3D_STOCK,
+    .ag_approach_pct3d = 0,
+    .restart_sync3d = false,
+    .restart_sync_ms3d = 45,
+    .reverse_gain3d = 100,
 );
 
 bool isUsingSticksForArming(void)

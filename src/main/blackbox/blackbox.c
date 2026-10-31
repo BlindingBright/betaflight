@@ -1421,6 +1421,10 @@ static bool blackboxWriteSysinfo(void)
         BLACKBOX_PRINT_HEADER_LINE("3d_iterm_load", "%s",                   lookupTableIterm3dLoad[flight3DConfig()->iterm_load3d]);
         BLACKBOX_PRINT_HEADER_LINE("3d_dyn_idle", "%d",                     flight3DConfig()->dyn_idle3d);
         BLACKBOX_PRINT_HEADER_LINE("3d_anti_gravity", "%s",                 lookupTableAntiGravity3d[flight3DConfig()->anti_gravity3d]);
+        BLACKBOX_PRINT_HEADER_LINE("3d_ag_approach_pct", "%d",              flight3DConfig()->ag_approach_pct3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_restart_sync", "%d",                 flight3DConfig()->restart_sync3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_restart_sync_ms", "%d",              flight3DConfig()->restart_sync_ms3d);
+        BLACKBOX_PRINT_HEADER_LINE("3d_reverse_gain", "%d",                 flight3DConfig()->reverse_gain3d);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_THRESHOLD, "%d",   currentPidProfile->ez_landing_threshold);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_LIMIT, "%d",       currentPidProfile->ez_landing_limit);
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_EZ_LANDING_SPEED, "%d",       currentPidProfile->ez_landing_speed);

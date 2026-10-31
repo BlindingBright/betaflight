@@ -82,7 +82,7 @@ extern "C" {
     static bool testFeature3d = true;
     static bool testDshot = true;
     static float testDT = 1.0f / 8000.0f;
-    static bool testAntiGravityReversed, testAntiGravityHolding;
+    static bool testAntiGravityReversed, testAntiGravityHolding, testAntiGravityApproaching;
 
     bool featureIsEnabled(uint32_t mask) { return mask == FEATURE_3D ? testFeature3d : false; }
     bool airmodeIsEnabled(void) { return true; }
@@ -113,7 +113,7 @@ extern "C" {
     void pidSetItermFreeze3d(bool) {}
     void pidUpdateTpaFactor(float) {}
     void pidUpdateAntiGravityThrottleFilter(float) {}
-    void pidAntiGravity3dReversal(bool reversed, bool holding) { testAntiGravityReversed = reversed; testAntiGravityHolding = holding; }
+    void pidAntiGravity3dReversal(bool reversed, bool holding, bool approaching) { testAntiGravityReversed = reversed; testAntiGravityHolding = holding; testAntiGravityApproaching = approaching; }
 }
 
 // DShot bidirectional telemetry word for an eRPM value (GCR period format eeem mmmm mmmm), decoded by the real dshot.c
@@ -177,6 +177,10 @@ static void setup(bool dynIdle3d, uint8_t dynIdleMinRpm)
     flight3DConfigMutable()->iterm_rpm_pct3d = 40;
     flight3DConfigMutable()->iterm_learn_hz_x10 = 5;
     flight3DConfigMutable()->iterm_learn_thr3d = 50;
+    flight3DConfigMutable()->ag_approach_pct3d = 0;
+    flight3DConfigMutable()->restart_sync3d = false;
+    flight3DConfigMutable()->restart_sync_ms3d = 45;
+    flight3DConfigMutable()->reverse_gain3d = 100;
     flight3DConfigMutable()->dyn_idle3d = dynIdle3d;
     motorConfigMutable()->digitalIdleOffsetValue = 150;   // dshot_idle_value 1.5%
     motorConfigMutable()->motorPoleCount = POLES;
@@ -408,4 +412,121 @@ TEST(Mixer3dTest, dynIdleFollowsTheReversal)
     EXPECT_EQ(-1, motorDirection());
     EXPECT_GT(minMotor(), reverseIdle() + 50.0f);
     EXPECT_LE(maxMotor(), DSHOT_3D_FORWARD_MIN_THROTTLE - 1);
+}
+
+TEST(Mixer3dTest, dynIdleQuickUnwind)
+{
+    // a reversal saturates dyn idle I (slowest motor ~0 rpm); once the motors are fast again it must be gone within 50 ms,
+    // not ~2 s (stock "falls slowly"), or the next flip / center stick would start with raised idle
+    setup(true, 50);
+    setThrottle(1530);
+    runLoops(20, 20000);
+    runLoops(200, 0);
+    EXPECT_NEAR(mixerRuntime.dynIdleI, 0.10f, 0.001f);
+    runLoops(400, 30000);                       // 50 ms at 8 kHz
+    EXPECT_NEAR(mixerRuntime.dynIdleI, 0.0f, 0.0001f);
+    setThrottle(1500);                          // center stick right after: exact static idle
+    runLoops(8, 30000);
+    EXPECT_NEAR(minMotor(), forwardIdle(), 0.6f);
+}
+
+static void flipWithRollPitch(void)
+{
+    pidData[FD_ROLL].Sum = 100.0f;
+    pidData[FD_PITCH].Sum = -60.0f;
+    pidData[FD_YAW].Sum = 40.0f;
+    setThrottle(1700);
+    runLoops(20, 20000);
+    setThrottle(1300);                          // reversal
+}
+
+static float motorSpread(void) { return maxMotor() - minMotor(); }
+
+TEST(Mixer3dTest, restartSyncFlattensMix)
+{
+    setup(false, 0);
+    flight3DConfigMutable()->restart_sync3d = true;
+    flipWithRollPitch();
+    for (int n = 0; n < 280; n++) {             // first 35 ms (8 kHz): before the 10 ms blend
+        runLoops(1, 20000);
+        ASSERT_EQ(-1, motorDirection());
+        EXPECT_NEAR(motorSpread(), 0.0f, 0.01f) << "loop " << n;
+    }
+    runLoops(40, 20000);                        // 40 ms: half blended
+    const float half = motorSpread();
+    runLoops(80, 20000);                        // 50 ms: full mix again
+    const float full = motorSpread();
+    EXPECT_GT(half, 1.0f);
+    EXPECT_GT(full, half);
+
+    // without restart sync the mix is there from the first loop after the reversal, with the same full spread
+    setup(false, 0);
+    flipWithRollPitch();
+    runLoops(1, 20000);
+    EXPECT_NEAR(motorSpread(), full, 0.5f);
+}
+
+TEST(Mixer3dTest, restartSyncOnlyAfterReversal)
+{
+    // no flat window during normal flight in one direction
+    setup(false, 0);
+    flight3DConfigMutable()->restart_sync3d = true;
+    pidData[FD_ROLL].Sum = 100.0f;
+    setThrottle(1700);
+    runLoops(800, 20000);                       // 100 ms after the arming direction change
+    EXPECT_GT(motorSpread(), 10.0f);
+}
+
+TEST(Mixer3dTest, reverseGainScalesMixOnlyReversed)
+{
+    float spread[2][2];                         // [gain 100, 120][forward, reverse]
+    for (int g = 0; g < 2; g++) {
+        setup(false, 0);
+        flight3DConfigMutable()->reverse_gain3d = g ? 120 : 100;
+        pidData[FD_ROLL].Sum = 60.0f;
+        setThrottle(1700);
+        runLoops(800, 20000);
+        spread[g][0] = motorSpread();
+        setThrottle(1300);
+        runLoops(4000, 20000);                  // past the I-term hold
+        spread[g][1] = motorSpread();
+    }
+    EXPECT_NEAR(spread[1][0], spread[0][0], 0.01f);          // forward unchanged
+    EXPECT_NEAR(spread[1][1], spread[0][1] * 1.2f, 0.5f);    // reverse mix x1.2
+}
+
+TEST(Mixer3dTest, antiGravityApproachFlag)
+{
+    setup(false, 0);
+    flight3DConfigMutable()->anti_gravity3d = ANTI_GRAVITY_3D_GATED;
+    setThrottle(1700);
+    runLoops(800, 20000);
+    setThrottle(1560);                          // default 3d_ag_approach_pct 0: approach gate off (GATED = v0.3.0)
+    runLoops(1, 20000);
+    EXPECT_FALSE(testAntiGravityApproaching);
+    flight3DConfigMutable()->ag_approach_pct3d = 15;
+    setThrottle(1700);
+    runLoops(800, 20000);
+    EXPECT_FALSE(testAntiGravityApproaching);
+    setThrottle(1560);                          // 57 / 497 = 11% throttle, falling -> approach
+    runLoops(1, 20000);
+    EXPECT_TRUE(testAntiGravityApproaching);
+    setThrottle(1600);                          // rising again in the same direction (punch): not an approach
+    runLoops(1, 20000);
+    EXPECT_FALSE(testAntiGravityApproaching);
+    setThrottle(1580);                          // falling but above 15%: not yet
+    runLoops(1, 20000);
+    EXPECT_FALSE(testAntiGravityApproaching);
+}
+
+TEST(Mixer3dTest, dynIdleSlowFallNearTarget)
+{
+    // just above dyn_idle_min_rpm (within 25%) the stock slow fall is kept, so I can't hunt around the target
+    setup(true, 50);
+    setThrottle(1530);
+    runLoops(20, 20000);
+    runLoops(200, 0);
+    const float saturated = mixerRuntime.dynIdleI;
+    runLoops(400, 5600);                        // 50 ms at 5600 rpm: 12% above the 5000 rpm target
+    EXPECT_GT(mixerRuntime.dynIdleI, saturated * 0.95f);
 }

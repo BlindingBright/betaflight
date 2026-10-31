@@ -297,14 +297,15 @@ void pidUpdateTpaFactor(float throttle)
 
 static FAST_DATA_ZERO_INIT bool antiGravityIgnoreThrottle;
 
-// 3D: the throttle magnitude passes through zero at every motor reversal; that is a direction change, not a throttle chop
-void pidAntiGravity3dReversal(bool reversed, bool holding)
+// 3D: the throttle magnitude passes through zero at every motor reversal; that is a direction change, not a throttle chop.
+// approaching: the throttle is falling into the low range on the way to center, where most of the "chop" of a reversal happens
+void pidAntiGravity3dReversal(bool reversed, bool holding, bool approaching)
 {
     if (reversed) {
         pidRuntime.antiGravityLpf.state = 0.0f;
         pidRuntime.antiGravityLpf.state1 = 0.0f;
     }
-    antiGravityIgnoreThrottle = reversed || holding;
+    antiGravityIgnoreThrottle = reversed || holding || approaching;
 }
 
 void pidUpdateAntiGravityThrottleFilter(float throttle)

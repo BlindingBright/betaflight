@@ -107,7 +107,6 @@ blackbox_encoding_unittest_SRC :=  \
 cli_unittest_SRC := \
 		$(USER_DIR)/cli/cli.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/printf.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
@@ -115,8 +114,6 @@ cli_unittest_SRC := \
 		$(USER_DIR)/config/feature.c \
 		$(USER_DIR)/io/gps.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/fc/runtime_config.c \
 		$(USER_DIR)/drivers/serial.c \
 		$(USER_DIR)/common/typeconversion.c
@@ -238,7 +235,6 @@ link_quality_unittest_SRC := \
 		$(USER_DIR)/drivers/display.c \
 		$(USER_DIR)/drivers/serial.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/printf.c \
 		$(USER_DIR)/common/streambuf.c \
@@ -248,8 +244,6 @@ link_quality_unittest_SRC := \
 		$(USER_DIR)/fc/rc_modes.c \
 		$(USER_DIR)/rx/rx.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/rx/crsf.c \
 		$(USER_DIR)/pg/rx.c
 
@@ -261,18 +255,14 @@ link_quality_unittest_DEFINES := \
 pg_unittest_SRC := \
 		$(USER_DIR)/common/crc.c \
 		$(USER_DIR)/common/streambuf.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/pg/pg.c
 
 
 rc_controls_unittest_SRC := \
 		$(USER_DIR)/fc/rc_controls.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/bitarray.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/fc/rc_adjustments.c \
@@ -282,7 +272,6 @@ rc_controls_unittest_SRC := \
 rx_crsf_unittest_SRC := \
 		$(USER_DIR)/rx/crsf.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/printf.c \
 		$(USER_DIR)/common/typeconversion.c \
 		$(USER_DIR)/common/streambuf.c \
@@ -296,14 +285,11 @@ rx_ibus_unittest_SRC := \
 rx_ranges_unittest_SRC := \
 		$(USER_DIR)/common/bitarray.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/fc/rc_modes.c \
 		$(USER_DIR)/rx/rx.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/pg/rx.c
 
 
@@ -318,13 +304,11 @@ rx_rx_unittest_SRC := \
 rx_sumd_unittest_SRC := \
 		$(USER_DIR)/common/crc.c \
 		$(USER_DIR)/common/streambuf.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/rx/sumd.c
 
 scheduler_unittest_SRC := \
 		$(USER_DIR)/scheduler/scheduler.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(TEST_DIR)/scheduler_stubs.c
 
@@ -337,22 +321,18 @@ sensor_gyro_unittest_SRC := \
 		$(USER_DIR)/sensors/boardalignment.c \
 		$(USER_DIR)/common/filter.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/sensor_alignment.c \
 		$(USER_DIR)/drivers/accgyro/accgyro_virtual.c \
 		$(USER_DIR)/drivers/accgyro/gyro_sync.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/pg/gyrodev.c
 
 telemetry_crsf_unittest_SRC := \
 		$(USER_DIR)/rx/crsf.c \
 		$(USER_DIR)/telemetry/crsf.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/gps_conversion.c \
@@ -370,7 +350,6 @@ telemetry_crsf_msp_unittest_SRC := \
 		$(USER_DIR)/rx/crsf.c \
 		$(USER_DIR)/build/atomic.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/printf.c \
 		$(USER_DIR)/common/streambuf.c \
@@ -410,18 +389,14 @@ huffman_unittest_DEFINES := \
 
 rcdevice_unittest_SRC := \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/bitarray.c \
 		$(USER_DIR)/fc/rc_modes.c \
 		$(USER_DIR)/io/rcdevice.c \
 		$(USER_DIR)/io/rcdevice_cam.c \
 		$(USER_DIR)/pg/pg.c \
-		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 
 pid_unittest_SRC :=  \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/filter.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
@@ -482,7 +457,6 @@ rx_spi_expresslrs_telemetry_unittest_SRC := \
 		$(USER_DIR)/rx/crsf.c \
 		$(USER_DIR)/telemetry/crsf.c \
 		$(USER_DIR)/common/crc.c \
-		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/maths.c \
 		$(USER_DIR)/common/streambuf.c \
 		$(USER_DIR)/common/gps_conversion.c \

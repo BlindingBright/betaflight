@@ -275,7 +275,13 @@ static float dynIdleIncrease(void)
     float dynIdleD = (mixerRuntime.prevMinRps - minRps) * mixerRuntime.dynIdleDGain;
     mixerRuntime.prevMinRps = minRps;
     float dynIdleP = rpsError * mixerRuntime.dynIdlePGain;
-    rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
+    // 3D: the slowest motor passes ~0 rpm at every reversal, which saturates I. Once every motor is clearly back above
+    // dyn_idle_min_rpm (25% margin) let it fall as fast as it rose; near the target keep the stock slow fall (no hunting)
+    const bool fastUnwind3d = mixerRuntime.feature3dEnabled && flight3DConfig()->dyn_idle3d
+        && rpsError < -0.25f * mixerRuntime.dynIdleMinRps;
+    if (!fastUnwind3d) {
+        rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
+    }
     mixerRuntime.dynIdleI += rpsError * mixerRuntime.dynIdleIGain;
     mixerRuntime.dynIdleI = constrainf(mixerRuntime.dynIdleI, 0.0f, maxIncrease);
     DEBUG_SET(DEBUG_DYN_IDLE, 0, MAX(-1000, lrintf(dynIdleP * 10000)));
@@ -287,6 +293,22 @@ static float dynIdleIncrease(void)
 
 static FAST_DATA_ZERO_INIT bool antiGravity3dReversed;
 static FAST_DATA_ZERO_INIT bool antiGravity3dHolding;
+static float restartSync3dScale = 1.0f;     // roll/pitch/yaw mix scale right after a reversal (3d_restart_sync)
+
+#define RESTART_SYNC_3D_BLEND_US 10000
+
+// 0 while the motors brake through zero (the mix has no authority then, but uneven commands make them restart unevenly),
+// blended back to 1 over the last 10 ms of 3d_restart_sync_ms
+static float restartSync3d(timeDelta_t sinceReversalUs)
+{
+    const flight3DConfig_t *cfg = flight3DConfig();
+    const timeDelta_t windowUs = cfg->restart_sync_ms3d * 1000;
+    if (!cfg->restart_sync3d || sinceReversalUs >= windowUs) {
+        return 1.0f;
+    }
+    const timeDelta_t blendUs = MIN(RESTART_SYNC_3D_BLEND_US, windowUs);
+    return constrainf((float)(sinceReversalUs - (windowUs - blendUs)) / blendUs, 0.0f, 1.0f);
+}
 
 static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 {
@@ -400,6 +422,7 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             currentThrottleInputRange > 0.0f ? throttle / currentThrottleInputRange : 0.0f);
         antiGravity3dReversed = reversed;
         antiGravity3dHolding = hold;
+        restartSync3dScale = restartSync3d(sinceReversalUs);
 
 #if defined(USE_DYN_IDLE) && defined(USE_DSHOT)
         // 3D dynamic idle: raise the idle of the current direction. Right after a reversal the slowest motor is near zero rpm,
@@ -795,11 +818,17 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
     }
 #endif
 
+    // 3D: flat mix right after a reversal (3d_restart_sync), more mix while reversed (3d_reverse_gain)
+    float pidMix3dScale = 1.0f;
+    if (mixerRuntime.feature3dEnabled) {
+        pidMix3dScale = restartSync3dScale * (motorOutputMixSign < 0 ? flight3DConfig()->reverse_gain3d * 0.01f : 1.0f);
+    }
+
     // Calculate and Limit the PID sum
     const float scaledAxisPidRoll =
-        constrainf(pidData[FD_ROLL].Sum, -currentPidProfile->pidSumLimit, currentPidProfile->pidSumLimit) / PID_MIXER_SCALING;
+        constrainf(pidData[FD_ROLL].Sum, -currentPidProfile->pidSumLimit, currentPidProfile->pidSumLimit) / PID_MIXER_SCALING * pidMix3dScale;
     const float scaledAxisPidPitch =
-        constrainf(pidData[FD_PITCH].Sum, -currentPidProfile->pidSumLimit, currentPidProfile->pidSumLimit) / PID_MIXER_SCALING;
+        constrainf(pidData[FD_PITCH].Sum, -currentPidProfile->pidSumLimit, currentPidProfile->pidSumLimit) / PID_MIXER_SCALING * pidMix3dScale;
 
     uint16_t yawPidSumLimit = currentPidProfile->pidSumLimitYaw;
 
@@ -811,7 +840,7 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
 #endif // USE_YAW_SPIN_RECOVERY
 
     float scaledAxisPidYaw =
-        constrainf(pidData[FD_YAW].Sum, -yawPidSumLimit, yawPidSumLimit) / PID_MIXER_SCALING;
+        constrainf(pidData[FD_YAW].Sum, -yawPidSumLimit, yawPidSumLimit) / PID_MIXER_SCALING * pidMix3dScale;
 
     if (!mixerConfig()->yaw_motors_reversed) {
         scaledAxisPidYaw = -scaledAxisPidYaw;
@@ -824,7 +853,10 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
 
     // use scaled throttle, without dynamic idle throttle offset, as the input to antigravity
     if (mixerRuntime.feature3dEnabled && flight3DConfig()->anti_gravity3d == ANTI_GRAVITY_3D_GATED) {
-        pidAntiGravity3dReversal(antiGravity3dReversed, antiGravity3dHolding);
+        static float agPreviousThrottle;
+        const bool approaching = throttle < flight3DConfig()->ag_approach_pct3d * 0.01f && throttle <= agPreviousThrottle;
+        agPreviousThrottle = throttle;
+        pidAntiGravity3dReversal(antiGravity3dReversed, antiGravity3dHolding, approaching);
     }
     pidUpdateAntiGravityThrottleFilter(throttle);
 

@@ -166,6 +166,10 @@ typedef struct flight3DConfig_s {
     // v0.3: appended after the v0.2 fields
     uint8_t dyn_idle3d;                     // dynamic idle in 3D: raise the idle of the current motor direction (needs dyn_idle_min_rpm)
     uint8_t anti_gravity3d;                 // antiGravity3d_e
+    uint8_t ag_approach_pct3d;              // GATED anti-gravity also ignores the throttle falling below this % (the approach to a reversal)
+    uint8_t restart_sync3d;                 // flatten the roll/pitch/yaw mix right after a reversal so all motors get the same command
+    uint8_t restart_sync_ms3d;              // length of that flat-mix window (the last 10 ms blend the mix back in)
+    uint8_t reverse_gain3d;                 // % scale of the roll/pitch/yaw mix while the motors run reversed (props weaker in reverse)
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);
