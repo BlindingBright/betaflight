@@ -849,7 +849,8 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
 
 #ifdef USE_DYN_IDLE
     // Set min throttle offset of 1% when stick is at zero and dynamic idle is active
-    if (mixerRuntime.dynIdleMinRps > 0.0f) {
+    // (not with 3D dynamic idle: in 3D the static idle stays and zero throttle is the stick center, where it would add thrust)
+    if (mixerRuntime.dynIdleMinRps > 0.0f && !(mixerRuntime.feature3dEnabled && flight3DConfig()->dyn_idle3d)) {
         throttle = MAX(throttle, 0.01f);
     }
 #endif
