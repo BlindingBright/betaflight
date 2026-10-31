@@ -54,6 +54,7 @@
 #include "sensors/gyro.h"
 
 #include "rc.h"
+#include "rc_3d.h"
 
 
 typedef float (applyRatesFn)(const int axis, float rcCommandf, const float rcCommandfAbs);
@@ -719,7 +720,12 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
     }
 
     if (getLowVoltageCutoff()->enabled) {
-        tmp = tmp * getLowVoltageCutoff()->percentage / 100;
+        if (featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d && !IS_RC_MODE_ACTIVE(BOX3D)) {
+            // normal 3D: scale toward stick center (zero thrust); scaling toward 0 would be full reverse
+            tmp = lowVoltageCutoffThrottle3d(tmp, getLowVoltageCutoff()->percentage);
+        } else {
+            tmp = tmp * getLowVoltageCutoff()->percentage / 100;
+        }
     }
 
     rcCommand[THROTTLE] = rcLookupThrottle(tmp);
@@ -777,14 +783,17 @@ void initRcProcessing(void)
     rcCommandDivider = 500.0f - rcControlsConfig()->deadband;
     rcCommandYawDivider = 500.0f - rcControlsConfig()->yaw_deadband;
 
+    // normal 3D: the curve's midpoint is stick center (zero thrust), so it stays there whatever thr_mid is
+    const uint8_t thrMid8 = (featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d)
+        ? throttleCurveMid3d(currentControlRateProfile->thrMid8) : currentControlRateProfile->thrMid8;
     for (int i = 0; i < THROTTLE_LOOKUP_LENGTH; i++) {
-        const int16_t tmp = 10 * i - currentControlRateProfile->thrMid8;
+        const int16_t tmp = 10 * i - thrMid8;
         uint8_t y = 1;
         if (tmp > 0)
-            y = 100 - currentControlRateProfile->thrMid8;
+            y = 100 - thrMid8;
         if (tmp < 0)
-            y = currentControlRateProfile->thrMid8;
-        lookupThrottleRC[i] = 10 * currentControlRateProfile->thrMid8 + tmp * (100 - currentControlRateProfile->thrExpo8 + (int32_t) currentControlRateProfile->thrExpo8 * (tmp * tmp) / (y * y)) / 10;
+            y = thrMid8;
+        lookupThrottleRC[i] = 10 * thrMid8 + tmp * (100 - currentControlRateProfile->thrExpo8 + (int32_t) currentControlRateProfile->thrExpo8 * (tmp * tmp) / (y * y)) / 10;
         lookupThrottleRC[i] = PWM_RANGE_MIN + PWM_RANGE * lookupThrottleRC[i] / 1000; // [MINTHROTTLE;MAXTHROTTLE]
     }
 

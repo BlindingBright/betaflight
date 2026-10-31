@@ -215,6 +215,7 @@ extern "C" {
     void failsafeOnRxSuspend(uint32_t ) {}
     void failsafeOnRxResume(void) {}
     bool failsafeIsActive(void) { return false; }
+    int8_t mixerGetMotorDirection3d(void) { return 1; }
     bool failsafeIsReceivingRxData(void) { return true; }
     uint32_t failsafeFailurePeriodMs(void) { return 400; }
     uint16_t flightModeFlags = 0;

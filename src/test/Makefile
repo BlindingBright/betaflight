@@ -202,6 +202,9 @@ mixer_3d_unittest_DEFINES := \
 		USE_DSHOT_TELEMETRY= \
 		USE_DYN_IDLE=
 
+rc_3d_unittest_SRC := \
+		$(USER_DIR)/common/maths.c
+
 motor_output_unittest_SRC := \
 		$(USER_DIR)/build/atomic.c \
 		$(USER_DIR)/drivers/dshot.c
