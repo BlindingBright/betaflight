@@ -139,6 +139,11 @@ typedef enum {
     ITERM_3D_LOAD_RELEASE,      // hold I-term at zero while the props restart (like stock), load the memory at release
 } iterm3dLoad_e;
 
+typedef enum {
+    ANTI_GRAVITY_3D_STOCK = 0,  // anti-gravity reacts to every throttle change, including the pass through center at a reversal
+    ANTI_GRAVITY_3D_GATED,      // ignore the throttle change of a reversal: reset at the reversal, no input while I-term is held
+} antiGravity3d_e;
+
 typedef struct flight3DConfig_s {
     uint16_t deadband3d_low;                // min 3d value
     uint16_t deadband3d_high;               // max 3d value
@@ -158,6 +163,9 @@ typedef struct flight3DConfig_s {
     uint8_t iterm_learn_thr3d;              // memory learns only above this % of the average in-flight throttle (not on the approach to center)
     uint16_t iterm_max_ms3d;                // RPM release: longest I-term hold (fallback if a restart isn't seen)
     uint8_t iterm_load3d;                   // iterm3dLoad_e: when the per-direction memory is applied
+    // v0.3: appended after the v0.2 fields
+    uint8_t dyn_idle3d;                     // dynamic idle in 3D: raise the idle of the current motor direction (needs dyn_idle_min_rpm)
+    uint8_t anti_gravity3d;                 // antiGravity3d_e
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);

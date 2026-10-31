@@ -395,6 +395,10 @@ const char * const lookupTableIterm3dLoad[] = {
     "FLIP", "RELEASE"
 };
 
+const char * const lookupTableAntiGravity3d[] = {
+    "STOCK", "GATED"
+};
+
 #ifdef USE_GPS_RESCUE
 static const char * const lookupTableRescueSanityType[] = {
     "RESCUE_SANITY_OFF", "RESCUE_SANITY_ON", "RESCUE_SANITY_FS_ONLY"
@@ -623,6 +627,7 @@ const lookupTableEntry_t lookupTables[] = {
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dRelease),
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dAxes),
     LOOKUP_TABLE_ENTRY(lookupTableIterm3dLoad),
+    LOOKUP_TABLE_ENTRY(lookupTableAntiGravity3d),
 #if defined(USE_VIDEO_SYSTEM)
     LOOKUP_TABLE_ENTRY(lookupTableVideoSystem),
 #endif
@@ -995,6 +1000,8 @@ const clivalue_t valueTable[] = {
     { "3d_iterm_learn_thr",         VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 0, 150 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_learn_thr3d) },
     { "3d_iterm_max_ms",            VAR_UINT16 | MASTER_VALUE, .config.minmaxUnsigned = { 50, 1000 }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_max_ms3d) },
     { "3d_iterm_load",              VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_3D_LOAD }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, iterm_load3d) },
+    { "3d_dyn_idle",                VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, dyn_idle3d) },
+    { "3d_anti_gravity",            VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ANTI_GRAVITY_3D }, PG_MOTOR_3D_CONFIG, offsetof(flight3DConfig_t, anti_gravity3d) },
 
 // PG_SERVO_CONFIG
 #ifdef USE_SERVOS

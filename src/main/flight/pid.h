@@ -447,6 +447,7 @@ void pidAcroTrainerInit(void);
 void pidSetAcroTrainerState(bool newState);
 void pidUpdateTpaFactor(float throttle);
 void pidUpdateAntiGravityThrottleFilter(float throttle);
+void pidAntiGravity3dReversal(bool reversed, bool holding);
 bool pidOsdAntiGravityActive(void);
 void pidSetAntiGravityState(bool newState);
 bool pidAntiGravityEnabled(void);

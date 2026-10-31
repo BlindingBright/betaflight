@@ -944,3 +944,36 @@ TEST(pidControllerTest, testLaunchControl)
     EXPECT_NEAR(44.84,  pidData[FD_YAW].P,   calculateTolerance(44.84));
     EXPECT_NEAR(1.56,   pidData[FD_YAW].I,  calculateTolerance(1.56));
 }
+
+TEST(pidControllerTest, testAntiGravity3dReversalGate)
+{
+    resetTest();
+
+    // stock: a fast throttle drop (here the pass through center at a 3D reversal) charges the anti-gravity filter
+    for (int loop = 0; loop < 50; loop++) {
+        pidUpdateAntiGravityThrottleFilter(0.4f);
+    }
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    for (int loop = 0; loop < 20; loop++) {
+        pidUpdateAntiGravityThrottleFilter(0.0f);
+    }
+    const float stockThrottleD = pidRuntime.antiGravityThrottleD;
+    EXPECT_GT(stockThrottleD, 0.0f);
+
+    // gated: the reversal resets the filter and the throttle change while I-term is held is ignored
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    pidAntiGravity3dReversal(true, true);
+    pidUpdateAntiGravityThrottleFilter(0.4f);
+    EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    for (int loop = 0; loop < 20; loop++) {
+        pidAntiGravity3dReversal(false, true);
+        pidUpdateAntiGravityThrottleFilter(0.0f);
+        EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    }
+
+    // after the release anti-gravity works as usual, without a jump from the throttle seen during the hold
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    pidUpdateAntiGravityThrottleFilter(0.4f);
+    EXPECT_GT(pidRuntime.antiGravityThrottleD, 0.0f);
+}

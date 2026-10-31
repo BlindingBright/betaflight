@@ -101,6 +101,7 @@ typedef enum {
     TABLE_ITERM_3D_RELEASE,
     TABLE_ITERM_3D_AXES,
     TABLE_ITERM_3D_LOAD,
+    TABLE_ANTI_GRAVITY_3D,
 #if defined(USE_VIDEO_SYSTEM)
     TABLE_VIDEO_SYSTEM,
 #endif
@@ -288,3 +289,4 @@ extern const char * const lookupTableIterm3dMode[];
 extern const char * const lookupTableIterm3dRelease[];
 extern const char * const lookupTableIterm3dAxes[];
 extern const char * const lookupTableIterm3dLoad[];
+extern const char * const lookupTableAntiGravity3d[];

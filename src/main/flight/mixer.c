@@ -261,6 +261,33 @@ static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs,
     }
 }
 
+#ifdef USE_DYN_IDLE
+// fraction of the motor range to add to idle so the slowest motor stays above dyn_idle_min_rpm
+static float dynIdleIncrease(void)
+{
+    const float maxIncrease = isAirmodeActivated()
+        ? mixerRuntime.dynIdleMaxIncrease : mixerRuntime.dynIdleStartIncrease;
+    float minRps = getMinMotorFrequencyHz();
+    DEBUG_SET(DEBUG_DYN_IDLE, 3, lrintf(minRps * 10.0f));
+    float rpsError = mixerRuntime.dynIdleMinRps - minRps;
+    // PT1 type lowpass delay and smoothing for D
+    minRps = mixerRuntime.prevMinRps + mixerRuntime.minRpsDelayK * (minRps - mixerRuntime.prevMinRps);
+    float dynIdleD = (mixerRuntime.prevMinRps - minRps) * mixerRuntime.dynIdleDGain;
+    mixerRuntime.prevMinRps = minRps;
+    float dynIdleP = rpsError * mixerRuntime.dynIdlePGain;
+    rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
+    mixerRuntime.dynIdleI += rpsError * mixerRuntime.dynIdleIGain;
+    mixerRuntime.dynIdleI = constrainf(mixerRuntime.dynIdleI, 0.0f, maxIncrease);
+    DEBUG_SET(DEBUG_DYN_IDLE, 0, MAX(-1000, lrintf(dynIdleP * 10000)));
+    DEBUG_SET(DEBUG_DYN_IDLE, 1, lrintf(mixerRuntime.dynIdleI * 10000));
+    DEBUG_SET(DEBUG_DYN_IDLE, 2, lrintf(dynIdleD * 10000));
+    return constrainf((dynIdleP + mixerRuntime.dynIdleI + dynIdleD), 0.0f, maxIncrease);
+}
+#endif
+
+static FAST_DATA_ZERO_INIT bool antiGravity3dReversed;
+static FAST_DATA_ZERO_INIT bool antiGravity3dHolding;
+
 static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 {
     static uint16_t rcThrottlePrevious = 0;   // Store the last throttle direction for deadband transitions
@@ -368,33 +395,28 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         }
         const bool reversed = motorOutputMixSign != previousMixSign;
         const timeDelta_t sinceReversalUs = cmpTimeUs(currentTimeUs, reversalTimeUs);
-        update3dIterm(reversed, iterm3dHold(reversed, currentTimeUs, sinceReversalUs), sinceReversalUs,
+        const bool hold = iterm3dHold(reversed, currentTimeUs, sinceReversalUs);
+        update3dIterm(reversed, hold, sinceReversalUs,
             currentThrottleInputRange > 0.0f ? throttle / currentThrottleInputRange : 0.0f);
+        antiGravity3dReversed = reversed;
+        antiGravity3dHolding = hold;
+
+#if defined(USE_DYN_IDLE) && defined(USE_DSHOT)
+        // 3D dynamic idle: raise the idle of the current direction. Right after a reversal the slowest motor is near zero rpm,
+        // so this also gives the restarting motors more command, which shortens the spin-up in the new direction.
+        // DShot only: both directions then run from motorOutputMin (idle) upwards.
+        if (flight3DConfig()->dyn_idle3d && mixerRuntime.dynIdleMinRps > 0.0f && isMotorProtocolDshot()) {
+            motorRangeMinIncrease = dynIdleIncrease();
+            motorOutputMin += motorRangeMinIncrease * motorOutputRange;
+            motorOutputRange *= 1.0f - motorRangeMinIncrease;
+            motorRangeMin = motorOutputMin;
+        }
+#endif
     } else {
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         currentThrottleInputRange = PWM_RANGE;
 #ifdef USE_DYN_IDLE
-        if (mixerRuntime.dynIdleMinRps > 0.0f) {
-            const float maxIncrease = isAirmodeActivated()
-                ? mixerRuntime.dynIdleMaxIncrease : mixerRuntime.dynIdleStartIncrease;
-            float minRps = getMinMotorFrequencyHz();
-            DEBUG_SET(DEBUG_DYN_IDLE, 3, lrintf(minRps * 10.0f));
-            float rpsError = mixerRuntime.dynIdleMinRps - minRps;
-            // PT1 type lowpass delay and smoothing for D
-            minRps = mixerRuntime.prevMinRps + mixerRuntime.minRpsDelayK * (minRps - mixerRuntime.prevMinRps);
-            float dynIdleD = (mixerRuntime.prevMinRps - minRps) * mixerRuntime.dynIdleDGain;
-            mixerRuntime.prevMinRps = minRps;
-            float dynIdleP = rpsError * mixerRuntime.dynIdlePGain;
-            rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
-            mixerRuntime.dynIdleI += rpsError * mixerRuntime.dynIdleIGain;
-            mixerRuntime.dynIdleI = constrainf(mixerRuntime.dynIdleI, 0.0f, maxIncrease);
-            motorRangeMinIncrease = constrainf((dynIdleP + mixerRuntime.dynIdleI + dynIdleD), 0.0f, maxIncrease);
-            DEBUG_SET(DEBUG_DYN_IDLE, 0, MAX(-1000, lrintf(dynIdleP * 10000)));
-            DEBUG_SET(DEBUG_DYN_IDLE, 1, lrintf(mixerRuntime.dynIdleI * 10000));
-            DEBUG_SET(DEBUG_DYN_IDLE, 2, lrintf(dynIdleD * 10000));
-        } else {
-            motorRangeMinIncrease = 0;
-        }
+        motorRangeMinIncrease = mixerRuntime.dynIdleMinRps > 0.0f ? dynIdleIncrease() : 0.0f;
 #endif
 
 #if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
@@ -801,6 +823,9 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
     }
 
     // use scaled throttle, without dynamic idle throttle offset, as the input to antigravity
+    if (mixerRuntime.feature3dEnabled && flight3DConfig()->anti_gravity3d == ANTI_GRAVITY_3D_GATED) {
+        pidAntiGravity3dReversal(antiGravity3dReversed, antiGravity3dHolding);
+    }
     pidUpdateAntiGravityThrottleFilter(throttle);
 
     // and for TPA

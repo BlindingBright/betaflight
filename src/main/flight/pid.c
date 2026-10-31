@@ -295,11 +295,24 @@ void pidUpdateTpaFactor(float throttle)
     pidRuntime.tpaFactor = 1.0f - tpaRate;
 }
 
+static FAST_DATA_ZERO_INIT bool antiGravityIgnoreThrottle;
+
+// 3D: the throttle magnitude passes through zero at every motor reversal; that is a direction change, not a throttle chop
+void pidAntiGravity3dReversal(bool reversed, bool holding)
+{
+    if (reversed) {
+        pidRuntime.antiGravityLpf.state = 0.0f;
+        pidRuntime.antiGravityLpf.state1 = 0.0f;
+    }
+    antiGravityIgnoreThrottle = reversed || holding;
+}
+
 void pidUpdateAntiGravityThrottleFilter(float throttle)
 {
     static float previousThrottle = 0.0f;
     const float throttleInv = 1.0f - throttle;
-    float throttleDerivative = fabsf(throttle - previousThrottle) * pidRuntime.pidFrequency;
+    float throttleDerivative = antiGravityIgnoreThrottle ? 0.0f : fabsf(throttle - previousThrottle) * pidRuntime.pidFrequency;
+    antiGravityIgnoreThrottle = false;
     DEBUG_SET(DEBUG_ANTI_GRAVITY, 0, lrintf(throttleDerivative * 100));
     throttleDerivative *= throttleInv * throttleInv;
     // generally focus on the low throttle period
