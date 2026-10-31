@@ -7,22 +7,25 @@
 >
 > **Pilots: download, testing guide and log upload are on the project page:
 > [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
-> (ready-to-flash TBS Lucid AIO build on the [v0.1.0-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.1.0-3d-test)).
+> (44 ready-to-flash boards on the [v0.2.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.2.2-3d-test)).
 >
 > Base: Betaflight 4.5.1 (`77d01ba3b`). Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
 > Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
 >
 > **Changes so far** (branch `3d-iterm-memory`; all default to stock behaviour):
 >
-> | Setting | Values | What it does |
+> | Setting | Values (default first) | What it does |
 > |---|---|---|
-> | `3d_iterm_mode` | `RESET` (default, stock) / `HOLD` / `PER_DIRECTION` | What happens to I-term when the motors reverse. `PER_DIRECTION` remembers a slow-averaged I-term for each motor direction and restores it on reversal, so a direction-dependent trim (e.g. a CG offset that flips sign when inverted) isn't thrown away on every flip. |
-> | `3d_iterm_reset_ms` | 0-500, default 250 | Length of the post-reversal window (stock: hard-coded 250 ms). `RESET` zeroes I-term for it; `HOLD` / `PER_DIRECTION` freeze integration while the props cross zero rpm. |
-> | `debug_mode = 3D_ITERM` | | [0] motor direction, [1] window active, [2-4] upright memory x10, [5-7] inverted memory x10 |
+> | `3d_iterm_mode` | `RESET` (stock) / `HOLD` / `PER_DIRECTION` | What happens to I-term when the motors reverse. `PER_DIRECTION` keeps a learned I-term per motor direction and restores it on reversal, so a direction-dependent trim isn't thrown away on every flip. `HOLD` / `PER_DIRECTION` freeze integration while the props cross zero rpm. |
+> | `3d_iterm_release` | `TIME` / `RPM` | End the post-reversal hold after `3d_iterm_reset_ms` (stock: hard-coded 250 ms), or as soon as every motor's bidirectional-DShot eRPM has dipped below and recovered above `3d_iterm_rpm_pct` % of the in-flight average, within `3d_iterm_min_ms`…`3d_iterm_max_ms` (50…400). Implausible eRPM jumps are filtered. |
+> | `3d_iterm_load` | `FLIP` / `RELEASE` | Load the learned I-term at the reversal or when the hold ends. |
+> | `3d_iterm_learn_thr`, `3d_iterm_learn_hz_x10` | 50 %, 0.5 Hz | Learning only in steady, unsaturated flight above 50 % of the quad's own average throttle, PT1 at 0.5 Hz. Memory persists across disarms. |
+> | `3d_iterm_axes` | `ALL` / `PITCH` / `ROLL_PITCH` | Axes that use the memory. |
+> | `debug_mode = 3D_ITERM` | | [0] motor direction, [1] ms since reversal while holding (0 once released), [2-4] upright memory x10, [5-7] inverted memory x10 |
 >
-> The blackbox header also records `3d_deadband_throttle`, `3d_iterm_mode` and `3d_iterm_reset_ms`.
+> The blackbox header records `3d_deadband_throttle` and all `3d_iterm_*` settings.
 >
-> Build: `make CONFIG=TBS_LUCID_AIO` with the [betaflight/config](https://github.com/betaflight/config) `4.5-config` branch in `src/config`.
+> Build: `make CONFIG=<board>` with the [betaflight/config](https://github.com/betaflight/config) `4.5-config` branch in `src/config`.
 
 ![Betaflight](images/bf_logo.png)
 
