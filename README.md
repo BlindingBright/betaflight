@@ -1,3 +1,10 @@
+> [!WARNING]
+> **You are on `3d-v0.3.1-experimental`: EXPERIMENTAL AND UNTESTED.** This is the active working branch that ZoeFPV is testing
+> internally (v0.3.0 + 3D fixes for the low-voltage cutoff, failsafe stage 2 throttle, `thr_mid`, and `vbat_sag_compensation`).
+> Unit tests pass and every board builds, but it has not flown yet. Stable: **v0.3.0-test** on `3d-iterm-memory` / `3d-v0.3`.
+> Testing guide: [EXPERIMENTAL_v0.3.1_TESTING.md](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/EXPERIMENTAL_v0.3.1_TESTING.md) ·
+> builds: [v0.3.1-experimental release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.1-experimental)
+
 > [!IMPORTANT]
 > **This is a testing fork for 3D (bidirectional / reversible motor) mode.**
 > It exists to try out and flight-test changes and improvements to Betaflight's 3D mode,
