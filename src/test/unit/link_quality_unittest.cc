@@ -497,7 +497,6 @@ extern "C" {
     bool areMotorsRunning(void){ return true; }
     bool pidOsdAntiGravityActive(void) { return false; }
     bool failsafeIsActive(void) { return false; }
-    int8_t mixerGetMotorDirection3d(void) { return 1; }
     bool failsafeIsReceivingRxData(void) { return true; }
     bool gpsIsHealthy(void) { return true; }
     bool gpsRescueIsConfigured(void) { return false; }

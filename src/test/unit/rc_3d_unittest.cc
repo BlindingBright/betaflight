@@ -49,18 +49,18 @@ TEST(Rc3dTest, lowVoltageCutoffShrinksTowardCenter)
 TEST(Rc3dTest, failsafeThrottleNeverReverses)
 {
     const float midrc = 1500.0f;
-    // default failsafe_throttle 1000 (= full reverse if used raw in 3D) -> zero thrust, either direction
-    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1000.0f, midrc, 1));
-    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1000.0f, midrc, -1));
+    // default failsafe_throttle 1000 (= full reverse if used raw in 3D) -> zero thrust
+    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1000.0f, midrc));
     // 2D-style "gentle landing" value: zero thrust, not 40% reverse
-    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1300.0f, midrc, 1));
-    // a 3D-aware value above center keeps working, as thrust in the current direction
-    EXPECT_FLOAT_EQ(1650.0f, failsafeThrottle3d(1650.0f, midrc, 1));
-    EXPECT_FLOAT_EQ(1350.0f, failsafeThrottle3d(1650.0f, midrc, -1));
-    // before the mixer has run (direction 0): upright
-    EXPECT_FLOAT_EQ(1650.0f, failsafeThrottle3d(1650.0f, midrc, 0));
-    // 1500 (zero thrust) stays zero thrust
-    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1500.0f, midrc, -1));
+    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1300.0f, midrc));
+    EXPECT_FLOAT_EQ(1500.0f, failsafeThrottle3d(1500.0f, midrc));
+    // a 3D-aware value above center keeps working as upright thrust (failsafe levels the quad upright)
+    EXPECT_FLOAT_EQ(1650.0f, failsafeThrottle3d(1650.0f, midrc));
+    EXPECT_FLOAT_EQ(2000.0f, failsafeThrottle3d(2000.0f, midrc));
+    // never below center, whatever the setting
+    for (float v = 885.0f; v <= 2115.0f; v += 5.0f) {
+        EXPECT_GE(failsafeThrottle3d(v, midrc), midrc);
+    }
 }
 
 TEST(Rc3dTest, throttleCurveMidIsCenter)

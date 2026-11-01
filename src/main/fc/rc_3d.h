@@ -33,12 +33,12 @@ static inline int32_t lowVoltageCutoffThrottle3d(int32_t stick, int percentage)
     return THROTTLE_3D_STICK_CENTER + (stick - THROTTLE_3D_STICK_CENTER) * percentage / 100;
 }
 
-// failsafe stage 2 throttle: failsafe_throttle counts as thrust above stick center in the motors' current direction.
-// Values at or below center (the default 1000, or 2D-style "gentle" values like 1300) give zero thrust instead of reverse.
-static inline float failsafeThrottle3d(float failsafeThrottle, float midrc, int direction)
+// failsafe stage 2 throttle: never reverse. Values at or below center (the default 1000 = full reverse in 3D, or 2D-style
+// "gentle" values like 1300) give zero thrust; values above center are upright thrust as before. Failsafe forces angle
+// mode (with an accelerometer), so the quad is levelled upright and upright thrust is the right direction to land with.
+static inline float failsafeThrottle3d(float failsafeThrottle, float midrc)
 {
-    const float thrust = failsafeThrottle > midrc ? failsafeThrottle - midrc : 0.0f;
-    return direction < 0 ? midrc - thrust : midrc + thrust;
+    return failsafeThrottle > midrc ? failsafeThrottle : midrc;
 }
 
 // throttle curve midpoint: in 3D the curve's midpoint is stick center, so thr_mid other than 50 would move zero thrust off

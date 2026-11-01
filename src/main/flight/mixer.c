@@ -985,12 +985,6 @@ void mixerSetThrottleAngleCorrection(int correctionValue)
     throttleAngleCorrection = correctionValue;
 }
 
-// 3D: direction the motors currently run (1 normal, -1 reversed, 0 before the first mixer run)
-int8_t mixerGetMotorDirection3d(void)
-{
-    return motorOutputMixSign;
-}
-
 float mixerGetThrottle(void)
 {
     return mixerThrottle;
