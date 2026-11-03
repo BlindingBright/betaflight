@@ -373,6 +373,64 @@ TEST(Mixer3dTest, reversalTellsAntiGravity)
     EXPECT_FALSE(testAntiGravityHolding);
 }
 
+// 3d_iterm_release = RPM: hold until every motor has restarted (telemetry), within [min, max]
+static void reverseAndHoldFor(int loops, float rpm)
+{
+    flight3DConfigMutable()->anti_gravity3d = ANTI_GRAVITY_3D_GATED;   // the hold is reported through the gated AG hook
+    setThrottle(1700);
+    runLoops(8 * 3000, 20000);     // 3 s steady forward flight: builds the slow eRPM reference (0.5 Hz)
+    setThrottle(1300);             // reversal
+    runLoops(loops, rpm);
+}
+
+// PID loops with no eRPM telemetry at all (no bidirectional DShot)
+static void runLoopsNoTelemetry(int loops)
+{
+    for (int n = 0; n < loops; n++) {
+        memset(&dshotTelemetryState, 0, sizeof(dshotTelemetryState));
+        nowUs += lrintf(testDT * 1e6f);
+        mixTable(nowUs);
+    }
+}
+
+TEST(Mixer3dTest, rpmReleaseWithoutTelemetryUsesResetTime)
+{
+    // no bidirectional DShot: fall back to the fixed 3d_iterm_reset_ms (250 ms), not the RPM mode's 400 ms cap
+    setup(false, 0);
+    flight3DConfigMutable()->iterm_release3d = ITERM_3D_RELEASE_RPM;
+    flight3DConfigMutable()->anti_gravity3d = ANTI_GRAVITY_3D_GATED;
+    useDshotTelemetry = false;
+    motorConfigMutable()->dev.useDshotTelemetry = false;
+    mixerInitProfile();
+    setThrottle(1700);
+    runLoopsNoTelemetry(800);
+    setThrottle(1300);                      // reversal
+    runLoopsNoTelemetry(8 * 240);
+    EXPECT_TRUE(testAntiGravityHolding);    // 240 ms: still held
+    runLoopsNoTelemetry(8 * 20);
+    EXPECT_FALSE(testAntiGravityHolding);   // 260 ms: released (stock-like), well before 400 ms
+}
+
+TEST(Mixer3dTest, rpmReleaseWithTelemetryWaitsForRestart)
+{
+    setup(false, 0);
+    flight3DConfigMutable()->iterm_release3d = ITERM_3D_RELEASE_RPM;
+    reverseAndHoldFor(8 * 100, 0);          // motors stopped for 100 ms after the reversal
+    EXPECT_TRUE(testAntiGravityHolding);
+    runLoops(8 * 80, 20000);                // motors back up to speed (the plausibility filter accepts it within ~50 ms)
+    EXPECT_FALSE(testAntiGravityHolding);   // released by 180 ms, before the 250 ms a fixed hold would take
+}
+
+TEST(Mixer3dTest, rpmReleaseWithTelemetryCapsAtMax)
+{
+    setup(false, 0);
+    flight3DConfigMutable()->iterm_release3d = ITERM_3D_RELEASE_RPM;
+    reverseAndHoldFor(8 * 390, 0);          // motors never report a restart
+    EXPECT_TRUE(testAntiGravityHolding);
+    runLoops(8 * 20, 0);
+    EXPECT_FALSE(testAntiGravityHolding);   // 3d_iterm_max_ms (400 ms) cap
+}
+
 static void expectMixKeptWithDynIdle(float rc)
 {
     // a roll correction must push the same motors up in both directions, with or without the raised idle

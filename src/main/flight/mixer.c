@@ -158,6 +158,7 @@ static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t since
     static FAST_DATA_ZERO_INIT bool released;
     const flight3DConfig_t *cfg = flight3DConfig();
     bool restarted = false;
+    bool rpmKnown = false;   // RPM release needs live eRPM telemetry from every motor
 
 #ifdef USE_DSHOT_TELEMETRY
     if (reversed) {
@@ -166,6 +167,7 @@ static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t since
         iterm3dMotorRestarted = 0;
     }
     if (isDshotTelemetryActive()) {
+        rpmKnown = true;
         // tracked every loop so the plausibility filter stays current
         restarted = iterm3dAllMotorsRestarted(currentTimeUs) && iterm3dErpmAverage > 0.0f;
     }
@@ -175,10 +177,11 @@ static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t since
         released = false;
     }
     if (!released) {
-        if (cfg->iterm_release3d == ITERM_3D_RELEASE_RPM) {
+        if (cfg->iterm_release3d == ITERM_3D_RELEASE_RPM && rpmKnown) {
             // as soon as every motor has restarted, within [min, max]; bigger props restart slower, so the cap is separate
             released = (restarted && sinceReversalUs >= cfg->iterm_min_ms3d * 1000) || sinceReversalUs >= cfg->iterm_max_ms3d * 1000;
         } else {
+            // TIME, or RPM without telemetry (no bidirectional DShot): fixed hold, not the RPM mode's longer cap
             released = sinceReversalUs >= cfg->iterm_reset_ms3d * 1000;
         }
     }
