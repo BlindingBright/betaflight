@@ -35,6 +35,7 @@
 #include "drivers/dshot.h"
 
 #include "fc/controlrate_profile.h"
+#include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
 
 #include "mixer.h"
@@ -343,6 +344,12 @@ void initEscEndpoints(void)
 
 void mixerInitProfile(void)
 {
+    // the per-direction memory follows I-term slowly, so it holds the steady trim (e.g. a CG offset)
+    // of each direction rather than the last maneuver's windup
+    mixerRuntime.iterm3dMemoryK = pt1FilterGain(flight3DConfig()->iterm_learn_hz_x10 * 0.1f, pidGetDT());
+    mixerRuntime.iterm3dRpmAverageK = pt1FilterGain(ITERM_3D_RPM_AVERAGE_CUTOFF_HZ, pidGetDT());
+    mixerRuntime.iterm3dThrottleAverageK = pt1FilterGain(ITERM_3D_THROTTLE_AVERAGE_CUTOFF_HZ, pidGetDT());
+
 #ifdef USE_DYN_IDLE
     if (useDshotTelemetry) {
         mixerRuntime.dynIdleMinRps = currentPidProfile->dyn_idle_min_rpm * 100.0f / 60.0f;

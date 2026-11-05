@@ -1181,3 +1181,83 @@ TEST(pidControllerTest, testTpaHyperbolic)
     pidUpdateTpaFactor(1.0);
     EXPECT_NEAR(0.9f, pidRuntime.tpaFactor, 0.01f);
 }
+
+TEST(pidControllerTest, testAntiGravity3dReversalGate)
+{
+    resetTest();
+
+    // stock: a fast throttle drop (here the pass through center at a 3D reversal) charges the anti-gravity filter
+    for (int loop = 0; loop < 50; loop++) {
+        pidUpdateAntiGravityThrottleFilter(0.4f);
+    }
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    for (int loop = 0; loop < 20; loop++) {
+        pidUpdateAntiGravityThrottleFilter(0.0f);
+    }
+    const float stockThrottleD = pidRuntime.antiGravityThrottleD;
+    EXPECT_GT(stockThrottleD, 0.0f);
+
+    // gated: the reversal resets the filter and the throttle change while I-term is held is ignored
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    pidAntiGravity3dReversal(true, true, false);
+    pidUpdateAntiGravityThrottleFilter(0.4f);
+    EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    for (int loop = 0; loop < 20; loop++) {
+        pidAntiGravity3dReversal(false, true, false);
+        pidUpdateAntiGravityThrottleFilter(0.0f);
+        EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    }
+
+    // after the release anti-gravity works as usual, without a jump from the throttle seen during the hold
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    EXPECT_FLOAT_EQ(0.0f, pidRuntime.antiGravityThrottleD);
+    pidUpdateAntiGravityThrottleFilter(0.4f);
+    EXPECT_GT(pidRuntime.antiGravityThrottleD, 0.0f);
+}
+
+TEST(pidControllerTest, testAntiGravity3dApproachGate)
+{
+    resetTest();
+
+    // the throttle magnitude falls from 0.40 to 0 on the way to a reversal; once it is in the low (approach) range the
+    // change is ignored, so the filter doesn't charge up right before the motors reverse
+    for (int loop = 0; loop < 50; loop++) {
+        pidUpdateAntiGravityThrottleFilter(0.4f);
+    }
+    float stockPeak = 0.0f, gatedPeak = 0.0f, stockAtCenter = 0.0f, gatedAtCenter = 0.0f;
+    for (int pass = 0; pass < 2; pass++) {
+        resetTest();
+        for (int loop = 0; loop < 20000; loop++) {    // settle: steady 0.40, filter fully discharged
+            pidUpdateAntiGravityThrottleFilter(0.4f);
+        }
+        float peak = 0.0f;
+        for (int step = 40; step >= 0; step--) {
+            const float throttle = step * 0.01f;            // 0.40 -> 0.00 in 41 loops
+            if (pass == 1) {
+                pidAntiGravity3dReversal(false, false, throttle < 0.15f);
+            }
+            pidUpdateAntiGravityThrottleFilter(throttle);
+            peak = MAX(peak, pidRuntime.antiGravityThrottleD);
+        }
+        for (int loop = 0; loop < 40; loop++) {             // sitting at center before the reversal
+            if (pass == 1) {
+                pidAntiGravity3dReversal(false, false, true);
+            }
+            pidUpdateAntiGravityThrottleFilter(0.0f);
+            peak = MAX(peak, pidRuntime.antiGravityThrottleD);
+        }
+        (pass ? gatedPeak : stockPeak) = peak;
+        (pass ? gatedAtCenter : stockAtCenter) = pidRuntime.antiGravityThrottleD;   // when the reversal comes
+    }
+    EXPECT_GT(stockPeak, 0.0f);
+    EXPECT_LT(gatedPeak, stockPeak * 0.8f);          // the low-throttle part of the drop, where (1 - throttle)^2 weighs most, is gone
+    EXPECT_LT(gatedAtCenter, stockAtCenter * 0.2f);  // and the boost has died away by the time the motors reverse
+
+    // a punch from center in the same direction (throttle rising) is not an approach: anti-gravity reacts
+    resetTest();
+    pidAntiGravity3dReversal(false, false, false);
+    pidUpdateAntiGravityThrottleFilter(0.0f);
+    pidAntiGravity3dReversal(false, false, false);
+    pidUpdateAntiGravityThrottleFilter(0.4f);
+    EXPECT_GT(pidRuntime.antiGravityThrottleD, 0.0f);
+}

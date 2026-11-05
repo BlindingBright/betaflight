@@ -98,7 +98,20 @@ PG_RESET_TEMPLATE(flight3DConfig_t, flight3DConfig,
     .deadband3d_throttle = 50,
     .limit3d_low = 1000,
     .limit3d_high = 2000,
-    .switched_mode3d = false
+    .switched_mode3d = false,
+    .iterm_reset_ms3d = 250,
+    .iterm_mode3d = ITERM_3D_PER_DIRECTION,
+    .iterm_min_ms3d = 50,
+    .iterm_release3d = ITERM_3D_RELEASE_RPM,
+    .iterm_rpm_pct3d = 40,
+    .iterm_learn_hz_x10 = 5,
+    .iterm_axes3d = ITERM_3D_AXES_ALL,
+    .iterm_learn_thr3d = 50,
+    .iterm_max_ms3d = 400,
+    .iterm_load3d = ITERM_3D_LOAD_FLIP,
+    .dyn_idle3d = true,
+    .anti_gravity3d = ANTI_GRAVITY_3D_GATED,
+    .ag_approach_pct3d = 15,
 );
 
 bool isUsingSticksForArming(void)

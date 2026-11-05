@@ -57,6 +57,7 @@
 #include "sensors/gyro.h"
 
 #include "rc.h"
+#include "rc_3d.h"
 
 #define RX_INTERVAL_MIN_US     800 // 0.800ms to fit 1kHz without an issue often 1khz rc comes in at 880us or so
 #define RX_INTERVAL_MAX_US   65500 // 65.5ms or 15.26hz
@@ -160,8 +161,9 @@ float getMaxRcDeflectionAbs(void)
 # define THROTTLE_LOOKUP_LENGTH 12
 #endif
 static int16_t lookupThrottleRC[THROTTLE_LOOKUP_LENGTH];    // lookup table for expo & mid THROTTLE
+static int16_t lookupThrottleRC3d[THROTTLE_LOOKUP_LENGTH];  // normal 3D: same expo, hover point at stick center (zero thrust)
 
-static int16_t rcLookupThrottle(int32_t tmp)
+static int16_t rcLookupThrottle(const int16_t *lookup, int32_t tmp)
 {
     // tmp is 0…PWM_RANGE
     // Spread that range evenly over THROTTLE_LOOKUP_LENGTH-1 steps
@@ -172,13 +174,13 @@ static int16_t rcLookupThrottle(int32_t tmp)
 
     // If index goes outside the valid range, clamp it
     if (idx >= steps) {
-        return lookupThrottleRC[steps];
+        return lookup[steps];
     } else if (idx < 0) {
-        return lookupThrottleRC[0];
+        return lookup[0];
     }
 
-    // Otherwise linearly interpolate between lookupThrottleRC[idx] and [idx+1]
-    return scaleRange(rem, 0, PWM_RANGE, lookupThrottleRC[idx], lookupThrottleRC[idx + 1]);
+    // Otherwise linearly interpolate between lookup[idx] and [idx+1]
+    return scaleRange(rem, 0, PWM_RANGE, lookup[idx], lookup[idx + 1]);
 }
 
 #define SETPOINT_RATE_LIMIT_MIN -1998.0f
@@ -728,11 +730,19 @@ FAST_CODE_NOINLINE void updateRcCommands(void)
         tmp = (uint32_t)(tmp - rxConfig()->mincheck) * PWM_RANGE_MIN / (PWM_RANGE_MAX - rxConfig()->mincheck);
     }
 
+    // normal 3D: stick center is zero thrust, the bottom is full reverse (not 3D switched mode, 3D mode switch off)
+    const bool normal3d = featureIsEnabled(FEATURE_3D) && !flight3DConfig()->switched_mode3d && !IS_RC_MODE_ACTIVE(BOX3D);
+
     if (getLowVoltageCutoff()->enabled) {
-        tmp = tmp * getLowVoltageCutoff()->percentage / 100;
+        if (normal3d) {
+            // scale toward stick center (zero thrust); scaling toward 0 would be full reverse
+            tmp = lowVoltageCutoffThrottle3d(tmp, getLowVoltageCutoff()->percentage);
+        } else {
+            tmp = tmp * getLowVoltageCutoff()->percentage / 100;
+        }
     }
 
-    rcCommand[THROTTLE] = rcLookupThrottle(tmp);
+    rcCommand[THROTTLE] = rcLookupThrottle(normal3d ? lookupThrottleRC3d : lookupThrottleRC, tmp);
 
     if (featureIsEnabled(FEATURE_3D) && !failsafeIsActive()) {
         if (!flight3DConfig()->switched_mode3d) {
@@ -826,14 +836,11 @@ static float quadraticBezier(float x, float p0x, float p1x, float p2x, float p0y
     return (1.0f - t) * (1.0f - t) * p0y + 2.0f * (1.0f - t) * t * p1y + t * t * p2y;
 }
 
-void initRcProcessing(void)
+static void generateThrottleCurve(int16_t *lookup, uint8_t thrMid8, uint8_t thrHover8)
 {
-    rcCommandDivider = 500.0f - rcControlsConfig()->deadband;
-    rcCommandYawDivider = 500.0f - rcControlsConfig()->yaw_deadband;
-
-    float thrMid   = currentControlRateProfile->thrMid8   / 100.0f;  // normalized x coordinate for hover point
+    float thrMid   = thrMid8   / 100.0f;  // normalized x coordinate for hover point
     float expo     = currentControlRateProfile->thrExpo8   / 100.0f;  // normalized expo (0.0 .. 1.0)
-    float thrHover = currentControlRateProfile->thrHover8 / 100.0f;  // normalized y coordinate for hover point
+    float thrHover = thrHover8 / 100.0f;  // normalized y coordinate for hover point
 
     /*
     Algorithm Overview:
@@ -869,8 +876,19 @@ void initRcProcessing(void)
             y = quadraticBezier(x, thrMid, cp2x, 1.0f, thrHover, cp2y, 1.0f);
         }
 
-        lookupThrottleRC[i] = lrintf(scaleRangef(y, 0.0f, 1.0f, PWM_RANGE_MIN, PWM_RANGE_MAX));
+        lookup[i] = lrintf(scaleRangef(y, 0.0f, 1.0f, PWM_RANGE_MIN, PWM_RANGE_MAX));
     }
+}
+
+void initRcProcessing(void)
+{
+    rcCommandDivider = 500.0f - rcControlsConfig()->deadband;
+    rcCommandYawDivider = 500.0f - rcControlsConfig()->yaw_deadband;
+
+    generateThrottleCurve(lookupThrottleRC, currentControlRateProfile->thrMid8, currentControlRateProfile->thrHover8);
+    // normal 3D: the hover point is stick center (zero thrust), so it stays there whatever thr_mid / thr_hover are
+    generateThrottleCurve(lookupThrottleRC3d, throttleCurveMid3d(currentControlRateProfile->thrMid8),
+        throttleCurveHover3d(currentControlRateProfile->thrHover8));
 
     switch (currentControlRateProfile->rates_type) {
     case RATES_TYPE_BETAFLIGHT:

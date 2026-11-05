@@ -271,6 +271,27 @@ maths_unittest_SRC := \
 		$(USER_DIR)/common/vector.c
 
 
+mixer_3d_unittest_SRC := \
+		$(USER_DIR)/flight/mixer.c \
+		$(USER_DIR)/flight/mixer_init.c \
+		$(USER_DIR)/pg/pg.c \
+		$(USER_DIR)/common/crc.c \
+		$(USER_DIR)/common/streambuf.c \
+		$(USER_DIR)/common/maths.c \
+		$(USER_DIR)/common/filter.c \
+		$(USER_DIR)/build/atomic.c \
+		$(USER_DIR)/drivers/dshot.c
+
+mixer_3d_unittest_DEFINES := \
+		USE_DSHOT= \
+		USE_DSHOT_TELEMETRY= \
+		USE_RPM_FILTER= \
+		USE_DYN_IDLE= \
+		USE_BATTERY_VOLTAGE_SAG_COMPENSATION=
+
+rc_3d_unittest_SRC := \
+		$(USER_DIR)/common/maths.c
+
 motor_output_unittest_SRC := \
 		$(USER_DIR)/build/atomic.c \
 		$(USER_DIR)/drivers/dshot.c

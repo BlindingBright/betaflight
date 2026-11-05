@@ -46,6 +46,7 @@
 #include "fc/runtime_config.h"
 #include "fc/tasks.h"
 
+#include "fc/rc_3d.h"
 #include "flight/failsafe.h"
 
 #include "io/serial.h"
@@ -771,6 +772,10 @@ static void detectAndApplySignalLossBehaviour(void)
                 if (!thisChannelValid) {
                     if (channel == THROTTLE ) {
                         sample = failsafeConfig()->failsafe_throttle;
+                        if (featureIsEnabled(FEATURE_3D) && !IS_RC_MODE_ACTIVE(BOX3D) && !flight3DConfig()->switched_mode3d) {
+                            // normal 3D: never reverse thrust (failsafe levels the quad upright, angle mode)
+                            sample = failsafeThrottle3d(sample, rxConfig()->midrc);
+                        }
                         // stage 2 failsafe throttle value. In GPS Rescue Flight mode, altitude control overrides, late in mixer.c
                     } else {
                         sample = rxConfig()->midrc;

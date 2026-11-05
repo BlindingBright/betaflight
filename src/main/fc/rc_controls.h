@@ -110,6 +110,33 @@ typedef struct rcControlsConfig_s {
 
 PG_DECLARE(rcControlsConfig_t, rcControlsConfig);
 
+typedef enum {
+    ITERM_3D_RESET = 0,         // zero I-term for the window (stock behaviour)
+    ITERM_3D_HOLD,              // keep I-term, freeze integration for the window
+    ITERM_3D_PER_DIRECTION,     // load the remembered I-term of the new direction, freeze for the window
+} iterm3dMode_e;
+
+typedef enum {
+    ITERM_3D_RELEASE_TIME = 0,  // hold I-term for 3d_iterm_reset_ms after a reversal
+    ITERM_3D_RELEASE_RPM,       // hold until every motor has restarted (eRPM), between 3d_iterm_min_ms and 3d_iterm_reset_ms
+} iterm3dRelease_e;
+
+typedef enum {
+    ITERM_3D_AXES_ALL = 0,
+    ITERM_3D_AXES_PITCH,
+    ITERM_3D_AXES_ROLL_PITCH,
+} iterm3dAxes_e;
+
+typedef enum {
+    ITERM_3D_LOAD_FLIP = 0,     // load the new direction's memory at the reversal, hold it frozen while the props restart
+    ITERM_3D_LOAD_RELEASE,      // hold I-term at zero while the props restart (like stock), load the memory at release
+} iterm3dLoad_e;
+
+typedef enum {
+    ANTI_GRAVITY_3D_STOCK = 0,  // anti-gravity reacts to every throttle change, including the pass through center at a reversal
+    ANTI_GRAVITY_3D_GATED,      // ignore the throttle change of a reversal: reset at the reversal, no input while I-term is held
+} antiGravity3d_e;
+
 typedef struct flight3DConfig_s {
     uint16_t deadband3d_low;                // min 3d value
     uint16_t deadband3d_high;               // max 3d value
@@ -118,6 +145,21 @@ typedef struct flight3DConfig_s {
     uint16_t limit3d_low;                   // pwm output value for max negative thrust
     uint16_t limit3d_high;                  // pwm output value for max positive thrust
     uint8_t switched_mode3d;                // enable '3D Switched Mode'
+    uint16_t iterm_reset_ms3d;              // I-term reset/freeze window after a motor reversal
+    uint8_t iterm_mode3d;                   // iterm3dMode_e: what happens to I-term on a motor reversal
+    // v0.2: appended after the v0.1 fields (and their padding byte) so older saved settings load unchanged
+    uint16_t iterm_min_ms3d;                // shortest I-term hold after a reversal (RPM release)
+    uint8_t iterm_release3d;                // iterm3dRelease_e
+    uint8_t iterm_rpm_pct3d;                // RPM release: restart threshold, % of the average in-flight eRPM
+    uint8_t iterm_learn_hz_x10;             // per-direction memory learning rate, 0.1 Hz units
+    uint8_t iterm_axes3d;                   // iterm3dAxes_e: axes that use the per-direction memory
+    uint8_t iterm_learn_thr3d;              // memory learns only above this % of the average in-flight throttle (not on the approach to center)
+    uint16_t iterm_max_ms3d;                // RPM release: longest I-term hold (fallback if a restart isn't seen)
+    uint8_t iterm_load3d;                   // iterm3dLoad_e: when the per-direction memory is applied
+    // v0.3: appended after the v0.2 fields
+    uint8_t dyn_idle3d;                     // dynamic idle in 3D: raise the idle of the current motor direction (needs dyn_idle_min_rpm)
+    uint8_t anti_gravity3d;                 // antiGravity3d_e
+    uint8_t ag_approach_pct3d;              // GATED anti-gravity also ignores the throttle falling below this % (the approach to a reversal)
 } flight3DConfig_t;
 
 PG_DECLARE(flight3DConfig_t, flight3DConfig);

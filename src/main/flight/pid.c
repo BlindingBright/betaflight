@@ -462,11 +462,25 @@ void pidUpdateTpaFactor(float throttle)
 #endif // USE_WING
 }
 
+static FAST_DATA_ZERO_INIT bool antiGravityIgnoreThrottle;
+
+// 3D: the throttle magnitude passes through zero at every motor reversal; that is a direction change, not a throttle chop.
+// approaching: the throttle is falling into the low range on the way to center, where most of the "chop" of a reversal happens
+void pidAntiGravity3dReversal(bool reversed, bool holding, bool approaching)
+{
+    if (reversed) {
+        pidRuntime.antiGravityLpf.state = 0.0f;
+        pidRuntime.antiGravityLpf.state1 = 0.0f;
+    }
+    antiGravityIgnoreThrottle = reversed || holding || approaching;
+}
+
 void pidUpdateAntiGravityThrottleFilter(float throttle)
 {
     static float previousThrottle = 0.0f;
     const float throttleInv = 1.0f - throttle;
-    float throttleDerivative = fabsf(throttle - previousThrottle) * pidRuntime.pidFrequency;
+    float throttleDerivative = antiGravityIgnoreThrottle ? 0.0f : fabsf(throttle - previousThrottle) * pidRuntime.pidFrequency;
+    antiGravityIgnoreThrottle = false;
     DEBUG_SET(DEBUG_ANTI_GRAVITY, 0, lrintf(throttleDerivative * 100));
     throttleDerivative *= throttleInv * throttleInv;
     // generally focus on the low throttle period
@@ -1294,7 +1308,8 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
             }
         }
 
-        float iTermChange = (Ki + pidRuntime.itermAccelerator) * pidRuntime.dT * itermErrorRate;
+        // 3D: no integration while the props cross zero rpm after a reversal
+        float iTermChange = pidRuntime.itermFreeze3d ? 0.0f : (Ki + pidRuntime.itermAccelerator) * pidRuntime.dT * itermErrorRate;
 #ifdef USE_WING
         if (pidProfile->spa_mode[axis] != SPA_MODE_OFF) {
             // slowing down I-term change, or even making it zero if setpoint is high enough
@@ -1554,6 +1569,11 @@ float dynLpfCutoffFreq(float throttle, uint16_t dynLpfMin, uint16_t dynLpfMax, u
 void pidSetItermReset(bool enabled)
 {
     pidRuntime.zeroThrottleItermReset = enabled;
+}
+
+void pidSetItermFreeze3d(bool enabled)
+{
+    pidRuntime.itermFreeze3d = enabled;
 }
 
 float pidGetPreviousSetpoint(int axis)

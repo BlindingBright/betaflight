@@ -19,6 +19,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <float.h>
 
@@ -115,6 +116,214 @@ static FAST_DATA_ZERO_INIT float motorOutputRange;
 static FAST_DATA_ZERO_INIT int8_t motorOutputMixSign;
 static FAST_DATA_ZERO_INIT bool crashflipSuccess = false;
 
+// per-direction I-term memory: [0] normal, [1] inverted motor direction. Kept across disarms, cleared on reboot.
+static FAST_DATA_ZERO_INIT float iterm3dMemory[2][XYZ_AXIS_COUNT];
+static FAST_DATA_ZERO_INIT float iterm3dThrottleAverage;    // per-direction throttle while flying (0..1)
+
+#ifdef USE_DSHOT_TELEMETRY
+// RPM release: per-motor restart detection after a 3D reversal (eRPM in telemetry units of 100)
+static FAST_DATA_ZERO_INIT float iterm3dErpm[MAX_SUPPORTED_MOTORS];      // last plausible eRPM reading
+static FAST_DATA_ZERO_INIT timeUs_t iterm3dErpmUs[MAX_SUPPORTED_MOTORS]; // when it was accepted
+static FAST_DATA_ZERO_INIT float iterm3dErpmAverage;                      // slow average while flying
+static FAST_DATA_ZERO_INIT uint8_t iterm3dMotorLow;                       // bit per motor: dropped below the threshold since the reversal
+static FAST_DATA_ZERO_INIT uint8_t iterm3dMotorRestarted;                 // bit per motor: back above it in the new direction
+
+// a real spool-up takes tens of ms; an AM32 desync reading jumps straight to a fixed high value
+#define ITERM_3D_MAX_ERPM_RISE_PER_S 20.0f      // as multiples of the average eRPM per second
+#define ITERM_3D_ERPM_RISE_SLACK     50.0f      // 5000 eRPM of telemetry noise
+
+// eRPM is unsigned, so a motor counts as restarted only after it has dropped below the threshold
+// (props crossing zero) and then climbed back above it
+static bool iterm3dAllMotorsRestarted(timeUs_t currentTimeUs)
+{
+    const int motorCount = mixerRuntime.motorCount;
+    const float threshold = iterm3dErpmAverage * flight3DConfig()->iterm_rpm_pct3d * 0.01f;
+    const float maxRisePerUs = iterm3dErpmAverage * ITERM_3D_MAX_ERPM_RISE_PER_S * 1e-6f;
+
+    for (int i = 0; i < motorCount; i++) {
+        const float erpm = getDshotErpm(i);
+        const timeDelta_t sinceUs = cmpTimeUs(currentTimeUs, iterm3dErpmUs[i]);
+        // falling readings are always accepted, rising ones only as fast as a motor can spin up, and never by
+        // more than one average step at once: a desync reading that persists must not become plausible over time
+        const float maxRise = MIN(maxRisePerUs * sinceUs, iterm3dErpmAverage) + ITERM_3D_ERPM_RISE_SLACK;
+        if (iterm3dErpmAverage <= 0.0f || erpm <= iterm3dErpm[i] + maxRise) {
+            iterm3dErpm[i] = erpm;
+            iterm3dErpmUs[i] = currentTimeUs;
+        }
+        if (iterm3dErpm[i] < threshold) {
+            iterm3dMotorLow |= 1 << i;
+        } else if (iterm3dMotorLow & (1 << i)) {
+            iterm3dMotorRestarted |= 1 << i;
+        }
+    }
+    return iterm3dMotorRestarted == (1 << motorCount) - 1;
+}
+#endif
+
+// true while I-term must stay held after the last reversal
+static bool iterm3dHold(bool reversed, timeUs_t currentTimeUs, timeDelta_t sinceReversalUs)
+{
+    static FAST_DATA_ZERO_INIT bool released;
+    const flight3DConfig_t *cfg = flight3DConfig();
+    bool restarted = false;
+    bool rpmKnown = false;   // RPM release needs live eRPM telemetry from every motor
+
+#ifdef USE_DSHOT_TELEMETRY
+    if (reversed) {
+        // always, so a telemetry dropout at the reversal can't carry over the previous flip's restarts
+        iterm3dMotorLow = 0;
+        iterm3dMotorRestarted = 0;
+    }
+    if (isDshotTelemetryActive()) {
+        rpmKnown = true;
+        // tracked every loop so the plausibility filter stays current
+        restarted = iterm3dAllMotorsRestarted(currentTimeUs) && iterm3dErpmAverage > 0.0f;
+    }
+#endif
+
+    if (reversed) {
+        released = false;
+    }
+    if (!released) {
+        if (cfg->iterm_release3d == ITERM_3D_RELEASE_RPM && rpmKnown) {
+            // as soon as every motor has restarted, within [min, max]; bigger props restart slower, so the cap is separate
+            released = (restarted && sinceReversalUs >= cfg->iterm_min_ms3d * 1000) || sinceReversalUs >= cfg->iterm_max_ms3d * 1000;
+        } else {
+            // TIME, or RPM without telemetry (no bidirectional DShot): fixed hold, not the RPM mode's longer cap
+            released = sinceReversalUs >= cfg->iterm_reset_ms3d * 1000;
+        }
+    }
+    return !released;
+}
+
+static bool iterm3dAxisUsesMemory(uint8_t axes, int axis)
+{
+    switch (axes) {
+    case ITERM_3D_AXES_PITCH:
+        return axis == FD_PITCH;
+    case ITERM_3D_AXES_ROLL_PITCH:
+        return axis != FD_YAW;
+    default:
+        return true;
+    }
+}
+
+static void update3dIterm(bool reversed, bool hold, timeDelta_t sinceReversalUs, float directionThrottle)
+{
+    const flight3DConfig_t *cfg = flight3DConfig();
+    const uint8_t mode = cfg->iterm_mode3d;
+    const int dir = motorOutputMixSign < 0 ? 1 : 0;
+    // learn only in steady flight: flying, past the hold, mix not saturated, and not on the approach to center
+    // (with little throttle, I-term swings with the deceleration and anti-gravity instead of holding the trim).
+    // "Little throttle" is relative to this quad's own average, so it works for any size / power-to-weight.
+    const bool flying = ARMING_FLAG(ARMED) && (wasThrottleRaised() || calculateThrottleStatus() != THROTTLE_LOW);
+    if (flying && !hold) {
+        iterm3dThrottleAverage += mixerRuntime.iterm3dThrottleAverageK * (directionThrottle - iterm3dThrottleAverage);
+    }
+    const bool steady = flying && !hold && getMotorMixRange() < 1.0f;
+    const bool learn = steady && directionThrottle >= iterm3dThrottleAverage * cfg->iterm_learn_thr3d * 0.01f;
+
+    static FAST_DATA_ZERO_INIT bool wasHolding;
+    const bool justReleased = wasHolding && !hold;
+    wasHolding = hold;
+
+    if (mode == ITERM_3D_PER_DIRECTION && ARMING_FLAG(ARMED)) {
+        const bool loadAtRelease = cfg->iterm_load3d == ITERM_3D_LOAD_RELEASE;
+        for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+            const bool useMemory = iterm3dAxisUsesMemory(cfg->iterm_axes3d, axis);
+            if (reversed) {
+                // start the new direction from its own remembered trim (other axes start from zero, like stock);
+                // with LOAD_RELEASE, stay at zero while the props restart and load once they have grip again
+                pidData[axis].I = (useMemory && !loadAtRelease) ? iterm3dMemory[dir][axis] : 0.0f;
+            } else if (justReleased && loadAtRelease && useMemory) {
+                pidData[axis].I = iterm3dMemory[dir][axis];
+            } else if (learn && useMemory) {
+                iterm3dMemory[dir][axis] += mixerRuntime.iterm3dMemoryK * (pidData[axis].I - iterm3dMemory[dir][axis]);
+            }
+        }
+    }
+
+#ifdef USE_DSHOT_TELEMETRY
+    // the eRPM reference uses all steady flight, not only the throttle range the memory learns from
+    if (steady && isDshotTelemetryActive()) {
+        float erpmSum = 0.0f;
+        for (int i = 0; i < mixerRuntime.motorCount; i++) {
+            erpmSum += iterm3dErpm[i];
+        }
+        iterm3dErpmAverage += mixerRuntime.iterm3dRpmAverageK * (erpmSum / mixerRuntime.motorCount - iterm3dErpmAverage);
+    }
+#endif
+
+    if (mode == ITERM_3D_RESET) {
+        pidSetItermFreeze3d(false);
+        if (hold) {
+            pidResetIterm();
+        }
+    } else {
+        // props have little authority while crossing zero rpm, don't wind up
+        pidSetItermFreeze3d(hold);
+    }
+
+    DEBUG_SET(DEBUG_3D_ITERM, 0, motorOutputMixSign);
+    DEBUG_SET(DEBUG_3D_ITERM, 1, hold ? MAX(1, sinceReversalUs / 1000) : 0); // ms since reversal while holding
+    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
+        DEBUG_SET(DEBUG_3D_ITERM, 2 + axis, lrintf(iterm3dMemory[0][axis] * 10.0f));
+        DEBUG_SET(DEBUG_3D_ITERM, 5 + axis, lrintf(iterm3dMemory[1][axis] * 10.0f));
+    }
+}
+
+#ifdef USE_DYN_IDLE
+// fraction of the motor range to add to idle so the slowest motor stays above dyn_idle_min_rpm
+static float dynIdleIncrease(void)
+{
+    const float maxIncrease = wasThrottleRaised()
+        ? mixerRuntime.dynIdleMaxIncrease : mixerRuntime.dynIdleStartIncrease;
+    float minRps = getMinMotorFrequencyHz();
+    DEBUG_SET(DEBUG_DYN_IDLE, 3, lrintf(minRps * 10.0f));
+    float rpsError = mixerRuntime.dynIdleMinRps - minRps;
+    // PT1 type lowpass delay and smoothing for D
+    minRps = mixerRuntime.prevMinRps + mixerRuntime.minRpsDelayK * (minRps - mixerRuntime.prevMinRps);
+    float dynIdleD = (mixerRuntime.prevMinRps - minRps) * mixerRuntime.dynIdleDGain;
+    mixerRuntime.prevMinRps = minRps;
+    float dynIdleP = rpsError * mixerRuntime.dynIdlePGain;
+    // 3D: the slowest motor passes ~0 rpm at every reversal, which saturates I. Once every motor is clearly back above
+    // dyn_idle_min_rpm (25% margin) let it fall as fast as it rose; near the target keep the stock slow fall (no hunting)
+    const bool fastUnwind3d = mixerRuntime.feature3dEnabled && flight3DConfig()->dyn_idle3d
+        && rpsError < -0.25f * mixerRuntime.dynIdleMinRps;
+    if (!fastUnwind3d) {
+        rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
+    }
+    mixerRuntime.dynIdleI += rpsError * mixerRuntime.dynIdleIGain;
+    mixerRuntime.dynIdleI = constrainf(mixerRuntime.dynIdleI, 0.0f, maxIncrease);
+    DEBUG_SET(DEBUG_DYN_IDLE, 0, MAX(-1000, lrintf(dynIdleP * 10000)));
+    DEBUG_SET(DEBUG_DYN_IDLE, 1, lrintf(mixerRuntime.dynIdleI * 10000));
+    DEBUG_SET(DEBUG_DYN_IDLE, 2, lrintf(dynIdleD * 10000));
+    return constrainf((dynIdleP + mixerRuntime.dynIdleI + dynIdleD), 0.0f, maxIncrease);
+}
+#endif
+
+#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
+// vbat_sag_compensation: fraction to take off the top of the motor range while the battery is full, so thrust stays the
+// same as it sags
+static float vbatSagAttenuation(void)
+{
+    float motorRangeAttenuationFactor = 0;
+    // reduce motorRangeMax when battery is full
+    if (mixerRuntime.vbatSagCompensationFactor > 0.0f) {
+        const uint16_t currentCellVoltage = getBatterySagCellVoltage();
+        // batteryGoodness = 1 when voltage is above vbatFull, and 0 when voltage is below vbatLow
+        float batteryGoodness = 1.0f - constrainf((mixerRuntime.vbatFull - currentCellVoltage) / mixerRuntime.vbatRangeToCompensate, 0.0f, 1.0f);
+        motorRangeAttenuationFactor = (mixerRuntime.vbatRangeToCompensate / mixerRuntime.vbatFull) * batteryGoodness * mixerRuntime.vbatSagCompensationFactor;
+        DEBUG_SET(DEBUG_BATTERY, 2, lrintf(batteryGoodness * 100));
+        DEBUG_SET(DEBUG_BATTERY, 3, lrintf(motorRangeAttenuationFactor * 1000));
+    }
+    return motorRangeAttenuationFactor;
+}
+#endif
+
+static FAST_DATA_ZERO_INIT bool antiGravity3dReversed;
+static FAST_DATA_ZERO_INIT bool antiGravity3dHolding;
+
 static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 {
     static uint16_t rcThrottlePrevious = 0;   // Store the last throttle direction for deadband transitions
@@ -125,6 +334,7 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
     if (mixerRuntime.feature3dEnabled) {
         uint16_t rcCommand3dDeadBandLow;
         uint16_t rcCommand3dDeadBandHigh;
+        const int8_t previousMixSign = motorOutputMixSign;
 
         if (!ARMING_FLAG(ARMED)) {
             rcThrottlePrevious = rxConfig()->midrc; // When disarmed set to mid_rc. It always results in positive direction after arming.
@@ -219,48 +429,52 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             throttle = 0;
             currentThrottleInputRange = rcCommandThrottleRange3dHigh;
         }
-        if (cmpTimeUs(currentTimeUs, reversalTimeUs) < 250000) {
-            // keep iterm zero for 250ms after motor reversal
-            pidResetIterm();
+        const bool reversed = motorOutputMixSign != previousMixSign;
+        const timeDelta_t sinceReversalUs = cmpTimeUs(currentTimeUs, reversalTimeUs);
+        const bool hold = iterm3dHold(reversed, currentTimeUs, sinceReversalUs);
+        update3dIterm(reversed, hold, sinceReversalUs,
+            currentThrottleInputRange > 0.0f ? throttle / currentThrottleInputRange : 0.0f);
+        antiGravity3dReversed = reversed;
+        antiGravity3dHolding = hold;
+
+        // both adjustments are fractions of the current direction's full band, like 2D (motorOutputRange is negative for
+        // reverse on non-DShot protocols)
+        const float bandRange3d = motorOutputRange;
+
+#if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
+        // 3D sag compensation: take the same fraction off the top of the current direction's band as stock does in 2D
+        // (stock skips it in 3D). The idle end stays.
+        if (!isCrashFlipModeActive()) {
+            motorOutputRange = bandRange3d * (1.0f - vbatSagAttenuation());
+            if (motorOutputRange > 0.0f) {
+                motorRangeMax = motorOutputMin + motorOutputRange;
+            } else {
+                motorRangeMin = motorOutputMin + motorOutputRange;
+            }
         }
+#endif
+
+#if defined(USE_DYN_IDLE) && defined(USE_DSHOT)
+        // 3D dynamic idle: raise the idle of the current direction. Right after a reversal the slowest motor is near zero rpm,
+        // so this also gives the restarting motors more command, which shortens the spin-up in the new direction.
+        // DShot only: both directions then run from motorOutputMin (idle) upwards.
+        if (flight3DConfig()->dyn_idle3d && mixerRuntime.dynIdleMinRps > 0.0f && isMotorProtocolDshot()) {
+            motorRangeMinIncrease = dynIdleIncrease();
+            const float top = motorOutputMin + motorOutputRange;
+            motorOutputMin += motorRangeMinIncrease * bandRange3d;
+            motorOutputRange = top - motorOutputMin;
+            motorRangeMin = motorOutputMin;
+        }
+#endif
     } else {
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         currentThrottleInputRange = PWM_RANGE;
 #ifdef USE_DYN_IDLE
-        if (mixerRuntime.dynIdleMinRps > 0.0f) {
-            const float maxIncrease = wasThrottleRaised()
-                ? mixerRuntime.dynIdleMaxIncrease : mixerRuntime.dynIdleStartIncrease;
-            float minRps = getMinMotorFrequencyHz();
-            DEBUG_SET(DEBUG_DYN_IDLE, 3, lrintf(minRps * 10.0f));
-            float rpsError = mixerRuntime.dynIdleMinRps - minRps;
-            // PT1 type lowpass delay and smoothing for D
-            minRps = mixerRuntime.prevMinRps + mixerRuntime.minRpsDelayK * (minRps - mixerRuntime.prevMinRps);
-            float dynIdleD = (mixerRuntime.prevMinRps - minRps) * mixerRuntime.dynIdleDGain;
-            mixerRuntime.prevMinRps = minRps;
-            float dynIdleP = rpsError * mixerRuntime.dynIdlePGain;
-            rpsError = MAX(-0.1f, rpsError); //I rises fast, falls slowly
-            mixerRuntime.dynIdleI += rpsError * mixerRuntime.dynIdleIGain;
-            mixerRuntime.dynIdleI = constrainf(mixerRuntime.dynIdleI, 0.0f, maxIncrease);
-            motorRangeMinIncrease = constrainf((dynIdleP + mixerRuntime.dynIdleI + dynIdleD), 0.0f, maxIncrease);
-            DEBUG_SET(DEBUG_DYN_IDLE, 0, MAX(-1000, lrintf(dynIdleP * 10000)));
-            DEBUG_SET(DEBUG_DYN_IDLE, 1, lrintf(mixerRuntime.dynIdleI * 10000));
-            DEBUG_SET(DEBUG_DYN_IDLE, 2, lrintf(dynIdleD * 10000));
-        } else {
-            motorRangeMinIncrease = 0;
-        }
+        motorRangeMinIncrease = mixerRuntime.dynIdleMinRps > 0.0f ? dynIdleIncrease() : 0.0f;
 #endif
 
 #if defined(USE_BATTERY_VOLTAGE_SAG_COMPENSATION)
-        float motorRangeAttenuationFactor = 0;
-        // reduce motorRangeMax when battery is full
-        if (mixerRuntime.vbatSagCompensationFactor > 0.0f) {
-            const uint16_t currentCellVoltage = getBatterySagCellVoltage();
-            // batteryGoodness = 1 when voltage is above vbatFull, and 0 when voltage is below vbatLow
-            float batteryGoodness = 1.0f - constrainf((mixerRuntime.vbatFull - currentCellVoltage) / mixerRuntime.vbatRangeToCompensate, 0.0f, 1.0f);
-            motorRangeAttenuationFactor = (mixerRuntime.vbatRangeToCompensate / mixerRuntime.vbatFull) * batteryGoodness * mixerRuntime.vbatSagCompensationFactor;
-            DEBUG_SET(DEBUG_BATTERY, 2, lrintf(batteryGoodness * 100));
-            DEBUG_SET(DEBUG_BATTERY, 3, lrintf(motorRangeAttenuationFactor * 1000));
-        }
+        const float motorRangeAttenuationFactor = vbatSagAttenuation();
         motorRangeMax = isCrashFlipModeActive() ? mixerRuntime.motorOutputHigh : mixerRuntime.motorOutputHigh - motorRangeAttenuationFactor * (mixerRuntime.motorOutputHigh - mixerRuntime.motorOutputLow);
 #else
         motorRangeMax = mixerRuntime.motorOutputHigh;
@@ -723,6 +937,12 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
     }
 
     // use scaled throttle, without dynamic idle throttle offset, as the input to antigravity
+    if (mixerRuntime.feature3dEnabled && flight3DConfig()->anti_gravity3d == ANTI_GRAVITY_3D_GATED) {
+        static float agPreviousThrottle;
+        const bool approaching = throttle < flight3DConfig()->ag_approach_pct3d * 0.01f && throttle <= agPreviousThrottle;
+        agPreviousThrottle = throttle;
+        pidAntiGravity3dReversal(antiGravity3dReversed, antiGravity3dHolding, approaching);
+    }
     pidUpdateAntiGravityThrottleFilter(throttle);
 
     // and for TPA
@@ -746,7 +966,8 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
 
 #ifdef USE_DYN_IDLE
     // Set min throttle offset of 1% when stick is at zero and dynamic idle is active
-    if (mixerRuntime.dynIdleMinRps > 0.0f) {
+    // (not with 3D dynamic idle: in 3D the static idle stays and zero throttle is the stick center, where it would add thrust)
+    if (mixerRuntime.dynIdleMinRps > 0.0f && !(mixerRuntime.feature3dEnabled && flight3DConfig()->dyn_idle3d)) {
         throttle = MAX(throttle, 0.01f);
     }
 #endif

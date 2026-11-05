@@ -422,6 +422,7 @@ typedef struct pidRuntime_s {
     float itermLimitYaw;
     bool itermRotation;
     bool zeroThrottleItermReset;
+    bool itermFreeze3d;
     bool levelRaceMode;
     float tpaFactor;
     float tpaBreakpoint;
@@ -550,6 +551,7 @@ void pidAcroTrainerInit(void);
 void pidSetAcroTrainerState(bool newState);
 void pidUpdateTpaFactor(float throttle);
 void pidUpdateAntiGravityThrottleFilter(float throttle);
+void pidAntiGravity3dReversal(bool reversed, bool holding, bool approaching);
 bool pidOsdAntiGravityActive(void);
 void pidSetAntiGravityState(bool newState);
 bool pidAntiGravityEnabled(void);
@@ -572,6 +574,7 @@ float calcHorizonLevelStrength(void);
 
 void dynLpfDTermUpdate(float throttle);
 void pidSetItermReset(bool enabled);
+void pidSetItermFreeze3d(bool enabled);
 float pidGetPreviousSetpoint(int axis);
 float pidGetDT(void);
 float pidGetPidFrequency(void);
