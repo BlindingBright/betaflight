@@ -355,7 +355,13 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         const float rcCommandThrottleRange3dLow = rcCommand3dDeadBandLow - PWM_RANGE_MIN;
         const float rcCommandThrottleRange3dHigh = PWM_RANGE_MAX - rcCommand3dDeadBandHigh;
 
-        if (rcCommand[THROTTLE] <= rcCommand3dDeadBandLow || isCrashFlipModeActive()) {
+        // normal 3D: when the autopilot sets the throttle (altitude hold, also engaged by failsafe landing, or GPS rescue),
+        // it levels the quad upright and its throttle is upright thrust, so run the motors in the upright direction.
+        // Otherwise a centered failsafe throttle keeps the last direction, and the autopilot would drive it in reverse.
+        const bool autopilotUpright3d = FLIGHT_MODE(ALT_HOLD_MODE | GPS_RESCUE_MODE)
+            && !IS_RC_MODE_ACTIVE(BOX3D) && !flight3DConfig()->switched_mode3d && !isCrashFlipModeActive();
+
+        if ((rcCommand[THROTTLE] <= rcCommand3dDeadBandLow && !autopilotUpright3d) || isCrashFlipModeActive()) {
             // INVERTED
             motorRangeMin = mixerRuntime.motorOutputLow;
             motorRangeMax = mixerRuntime.deadbandMotor3dLow;
@@ -378,8 +384,8 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             rcThrottlePrevious = rcCommand[THROTTLE];
             throttle = rcCommand3dDeadBandLow - rcCommand[THROTTLE];
             currentThrottleInputRange = rcCommandThrottleRange3dLow;
-        } else if (rcCommand[THROTTLE] >= rcCommand3dDeadBandHigh) {
-            // NORMAL
+        } else if (rcCommand[THROTTLE] >= rcCommand3dDeadBandHigh || autopilotUpright3d) {
+            // NORMAL (or upright for the autopilot)
             motorRangeMin = mixerRuntime.deadbandMotor3dHigh;
             motorRangeMax = mixerRuntime.motorOutputHigh;
             motorOutputMin = mixerRuntime.deadbandMotor3dHigh;

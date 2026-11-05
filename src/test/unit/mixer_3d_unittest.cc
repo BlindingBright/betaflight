@@ -172,6 +172,7 @@ static float maxMotor(void) { float m = -1e9f; for (int i = 0; i < 4; i++) m = M
 static void setup(bool dynIdle3d, uint8_t dynIdleMinRpm)
 {
     nowUs = 0;
+    flightModeFlags = 0;
     testFeature3d = true;
     testDshot = true;
     useDshotTelemetry = true;
@@ -597,4 +598,26 @@ TEST(Mixer3dTest, sagWithDynIdleStaysInBand)
     setThrottle(1000);
     runLoops(1, 0);
     EXPECT_NEAR(maxMotor(), top, 1.0f);         // full reverse reaches the held-back top, not past it
+}
+
+// failsafe landing / altitude hold / GPS rescue set the throttle themselves; in normal 3D that must be upright thrust
+static void flyReverseThenAutopilot(uint16_t mode, float stick)
+{
+    setup(false, 0);
+    setThrottle(1300);              // flying in reverse
+    runLoops(200, 20000);
+    EXPECT_EQ(-1, motorDirection());
+    flightModeFlags = mode;         // the autopilot takes the throttle (failsafe: stick channel centered)
+    setThrottle(stick);
+    runLoops(50, 20000);
+}
+
+TEST(Mixer3dTest, altHoldRunsUpright) { flyReverseThenAutopilot(ALT_HOLD_MODE, 1500); EXPECT_EQ(1, motorDirection()); }
+TEST(Mixer3dTest, gpsRescueRunsUpright) { flyReverseThenAutopilot(GPS_RESCUE_MODE, 1500); EXPECT_EQ(1, motorDirection()); }
+TEST(Mixer3dTest, altHoldUprightEvenWithReverseStick) { flyReverseThenAutopilot(ALT_HOLD_MODE, 1300); EXPECT_EQ(1, motorDirection()); }
+
+TEST(Mixer3dTest, withoutAutopilotCenteredStickKeepsReverse)
+{
+    flyReverseThenAutopilot(0, 1500);
+    EXPECT_EQ(-1, motorDirection());   // stock deadband behaviour unchanged
 }

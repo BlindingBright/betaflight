@@ -69,3 +69,12 @@ TEST(Rc3dTest, throttleCurveMidIsCenter)
     EXPECT_EQ(50, throttleCurveMid3d(45));
     EXPECT_EQ(50, throttleCurveMid3d(70));
 }
+
+TEST(Rc3dTest, throttleCurveHoverStaysAtCenter)
+{
+    // 2025.12+ curve passes through (thr_mid, thr_hover): both stay at 50 in normal 3D so stick center is zero thrust
+    for (int h = 0; h <= 100; h += 10) {
+        EXPECT_EQ(50, throttleCurveHover3d(h));
+        EXPECT_EQ(50, throttleCurveMid3d(h));
+    }
+}
