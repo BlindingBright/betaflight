@@ -1,3 +1,52 @@
+> [!IMPORTANT]
+> **This is a testing fork for 3D (bidirectional / reversible motor) mode.**
+> It exists to try out and flight-test changes and improvements to Betaflight's 3D mode,
+> with the hope that the ones that prove themselves get proposed for the main
+> [betaflight/betaflight](https://github.com/betaflight/betaflight) branch.
+> It is experimental: use the official releases for normal flying.
+>
+> **Pilots: download, testing guide and log upload are on the project page:
+> [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
+> (ready-to-flash boards on the [v0.3.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.2-3d-test)).
+>
+> Base: **Betaflight 2026.6.2** (`e0b7bb01b`, latest stable). The previous 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`. Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
+> Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
+>
+> **Current version: v0.3.2-test** (branch `3d-v0.3.2`): the v0.3.1 3D changes ported to Betaflight 2026.6.2. The BF3D logic is the
+> flight-tested v0.3.1 logic, but on a new Betaflight base, so v0.3.2 has **not been flown yet**. The 3D settings default to
+> ZoeFPV's best flying setup (Pass 53/56); set the stock values from the table to get stock Betaflight 3D behaviour.
+>
+> | Setting | Default (stock) | Values | What it does |
+> |---|---|---|---|
+> | `3d_iterm_mode` | `PER_DIRECTION` (`RESET`) | `RESET` / `HOLD` / `PER_DIRECTION` | What happens to I-term when the motors reverse. `PER_DIRECTION` keeps a learned I-term per motor direction and restores it on reversal, so a direction-dependent trim isn't thrown away on every flip. `HOLD` / `PER_DIRECTION` freeze integration while the props cross zero rpm. |
+> | `3d_iterm_release` | `RPM` (`TIME`) | `TIME` / `RPM` | End the post-reversal hold after `3d_iterm_reset_ms` (stock: hard-coded 250 ms), or as soon as every motor's bidirectional-DShot eRPM has dipped below and recovered above `3d_iterm_rpm_pct` % of the in-flight average, within `3d_iterm_min_ms`…`3d_iterm_max_ms` (50…400). Implausible eRPM jumps are filtered. Without RPM telemetry, `RPM` falls back to `3d_iterm_reset_ms`. |
+> | `3d_iterm_load` | `FLIP` | `FLIP` / `RELEASE` | Load the learned I-term at the reversal or when the hold ends. |
+> | `3d_iterm_learn_thr`, `3d_iterm_learn_hz_x10` | 50 %, 0.5 Hz | | Learning only in steady, unsaturated flight above 50 % of the quad's own average throttle, PT1 at 0.5 Hz. Memory persists across disarms. |
+> | `3d_iterm_axes` | `ALL` | `ALL` / `PITCH` / `ROLL_PITCH` | Axes that use the memory. |
+> | `3d_anti_gravity` | `GATED` (`STOCK`) | `STOCK` / `GATED` | `GATED`: the anti-gravity filter is reset at each reversal and ignores the throttle change while I-term is held, so a pass through center isn't a throttle chop. |
+> | `3d_ag_approach_pct` | 15 (0 = off) | 0 … 50 | With `GATED`, also ignore the throttle falling below this % on the way into a reversal. |
+> | `3d_dyn_idle` | `ON` (`OFF`) | `OFF` / `ON` | Runs the dynamic idle controller in 3D (stock skips it) and raises the idle of the current motor direction (DShot); no 1 % zero-throttle offset; I falls fast once every motor is >25 % above `dyn_idle_min_rpm`. Only active with bidirectional DShot and `dyn_idle_min_rpm` > 0 (stock default 0; 50 on 1S/2S whoops). |
+> | `debug_mode = 3D_ITERM` | | | [0] motor direction, [1] ms since reversal while holding (0 once released), [2-4] upright memory x10, [5-7] inverted memory x10 |
+>
+> **3D fixes (always on in normal 3D; no settings):** stock Betaflight treats the bottom of the stick as "off", which in 3D is full
+> reverse. v0.3.1 fixes the places where that leaks into 3D:
+> - low-voltage cutoff (`vbat_cutoff_percent` < 100) scales the throttle toward stick center, not toward full reverse;
+> - failsafe stage 2 never commands reverse thrust (`failsafe_throttle` ≤ 1500 → zero thrust; above → upright thrust);
+> - `thr_mid` / `thr_hover` (2026.6 throttle curve) no longer move zero thrust off stick center;
+> - `vbat_sag_compensation` works in 3D (stock skips it), as a fraction of the active direction's band;
+> - (new in v0.3.2) when the autopilot sets the throttle (altitude hold, which 2026.6 also engages for failsafe landing, or GPS
+>   rescue), the motors run upright: stock kept the last direction, so after a link loss in reverse it drove them in reverse.
+>
+> With the 3D mode switch (`3D DISABLE / SWITCH`) active or `3d_switched_mode = ON`, stock behaviour applies.
+>
+> The blackbox header records `3d_deadband_throttle` and all `3d_*` settings. Unit tests: `src/test/unit/mixer_3d_unittest.cc`
+> (real mixer + DShot code, both motor directions), `rc_3d_unittest` and `pid_unittest`.
+>
+> 2026.6 renames: the D boost is now `d` (base) + `d_max_*` (max) with `d_max_gain` / `d_max_advance` (4.5: `d_min_*` / `d`), and
+> `dshot_idle_value` is `motor_idle`, so a 4.5 `diff all` doesn't paste as-is.
+>
+> Build: `make CONFIG=<board>` with the [betaflight/config](https://github.com/betaflight/config) submodule (`src/config`, commit `3a406c5`).
+
 ![Betaflight](https://raw.githubusercontent.com/betaflight/.github/main/profile/images/bf_logo.svg#gh-light-mode-only)
 ![Betaflight](https://raw.githubusercontent.com/betaflight/.github/main/profile/images/bf_logo_dark.svg#gh-dark-mode-only)
 
