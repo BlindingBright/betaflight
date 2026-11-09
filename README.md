@@ -12,6 +12,14 @@
 > Base: **Betaflight 2026.6.2** (`e0b7bb01b`, latest stable). The previous 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`. Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
 > Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
 >
+> **Experimental: v0.3.3** (branch `3d-v0.3.3-experimental`, on top of v0.3.2, not released yet). Two 3D fixes, no new settings, saved
+> settings are kept:
+> - with `iterm_rotation = ON`, stock kept rotating the I-term while it is frozen after a motor reversal, so the I-term loaded for the
+>   new direction moved between axes during the roll-out (e.g. yaw I into roll). Frozen now means frozen; stock rotation resumes at release.
+> - in reverse the mixer applies the mix negated, but airmode / the throttle constraint used the bounds of the un-negated mix (every
+>   mixer type), so with roll + pitch + yaw together a motor could clip or full reverse throttle was pulled down too far. Same code in stock
+>   Betaflight. Upright and non-3D flight are bit-identical.
+>
 > **Current version: v0.3.2-test** (branch `3d-v0.3.2`): the v0.3.1 3D changes ported to Betaflight 2026.6.2. The BF3D logic is the
 > flight-tested v0.3.1 logic, but on a new Betaflight base, so v0.3.2 has **not been flown yet**. The 3D settings default to
 > ZoeFPV's best flying setup (Pass 53/56); set the stock values from the table to get stock Betaflight 3D behaviour.
