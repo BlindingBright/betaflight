@@ -662,3 +662,40 @@ TEST(Mixer3dTest, airmodeFullMixAtFullThrottleBothDirections)
     EXPECT_NEAR(0.4f, spread, 0.01f);
     EXPECT_NEAR(1.0f, top, 0.01f);                  // stock: 0.8, throttle pulled down further than needed
 }
+
+// General form: reversed motors with PID sums S must get exactly what forward motors get with -S at the same throttle
+// magnitude (each in its own band), for every mixer type. That is what "the mix is applied as -mix in reverse" means.
+static void normalizedOutputs(uint8_t mixerType, float rc, const float sums[3], float out[4])
+{
+    setup(false, 0);
+    mixerConfigMutable()->mixer_type = mixerType;
+    mixerInitProfile();
+    for (int a = 0; a < 3; a++) pidData[a].Sum = sums[a];
+    setThrottle(rc);
+    runLoops(20, 20000);
+    const bool forward = rc > 1500;
+    const float bandLow = forward ? forwardIdle() : reverseIdle();
+    const float bandHigh = forward ? DSHOT_MAX_THROTTLE : DSHOT_3D_FORWARD_MIN_THROTTLE - 1;
+    for (int i = 0; i < 4; i++) out[i] = (motor[i] - bandLow) / (bandHigh - bandLow);
+}
+
+TEST(Mixer3dTest, reverseIsMirrorOfForwardForEveryMixerType)
+{
+    const uint8_t types[] = { MIXER_LEGACY, MIXER_LINEAR, MIXER_DYNAMIC, MIXER_EZLANDING };
+    const float sumSets[][3] = { { -100, 100, 100 }, { 150, 0, 0 }, { 60, -250, 120 } };
+    const float sticks[] = { 3, 200, 500 };    // offset from the 3D center: zero, middle and full throttle
+    for (const uint8_t type : types) {
+        for (const auto &s : sumSets) {
+            for (const float k : sticks) {
+                const float neg[3] = { -s[0], -s[1], -s[2] };
+                float fwd[4], rev[4];
+                normalizedOutputs(type, 1500 + k, neg, fwd);
+                normalizedOutputs(type, 1500 - k, s, rev);
+                for (int i = 0; i < 4; i++) {
+                    EXPECT_NEAR(fwd[i], rev[i], 0.005f) << "mixer_type " << (int)type << " sums " << s[0] << "," << s[1]
+                        << "," << s[2] << " stick +-" << k << " motor " << i;
+                }
+            }
+        }
+    }
+}
