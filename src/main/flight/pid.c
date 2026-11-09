@@ -837,7 +837,9 @@ static void rotateVector(float v[XYZ_AXIS_COUNT], const float rotation[XYZ_AXIS_
 
 STATIC_UNIT_TESTED void rotateItermAndAxisError(void)
 {
-    if (pidRuntime.itermRotation) {
+    // 3D: while frozen after a motor reversal, I holds the trim for the new direction in the body frame, so leave it
+    // unchanged; rotating it would move e.g. a remembered yaw I into roll during the roll-out
+    if (pidRuntime.itermRotation && !pidRuntime.itermFreeze3d) {
         const float gyroToAngle = pidRuntime.dT * RAD;
         float rotationRads[XYZ_AXIS_COUNT];
         for (int i = FD_ROLL; i <= FD_YAW; i++) {

@@ -621,3 +621,44 @@ TEST(Mixer3dTest, withoutAutopilotCenteredStickKeepsReverse)
     flyReverseThenAutopilot(0, 1500);
     EXPECT_EQ(-1, motorDirection());   // stock deadband behaviour unchanged
 }
+
+// airmode in reverse: the mix is applied as -mix (mixer.c applyMixToMotors), so the throttle shift that keeps every motor
+// inside the band must use the reversed mix's bounds. Roll -100, pitch +100, yaw +100 on quad X mixes to {+0.3, -0.1, -0.1, -0.1}
+// (asymmetric, range 0.4 < 1): airmode can always deliver the whole 0.4 spread, in either direction, at any stick position.
+static void airmodeSpread(float rc, float *spread, float *top, float *bottom)
+{
+    setup(false, 0);
+    pidData[FD_ROLL].Sum = -100.0f;
+    pidData[FD_PITCH].Sum = 100.0f;
+    pidData[FD_YAW].Sum = 100.0f;
+    setThrottle(rc);
+    runLoops(20, 20000);
+    const bool forward = rc > 1500;
+    const float bandLow = forward ? forwardIdle() : reverseIdle();
+    const float bandHigh = forward ? DSHOT_MAX_THROTTLE : DSHOT_3D_FORWARD_MIN_THROTTLE - 1;
+    *spread = (maxMotor() - minMotor()) / (bandHigh - bandLow);
+    *top = (maxMotor() - bandLow) / (bandHigh - bandLow);
+    *bottom = (minMotor() - bandLow) / (bandHigh - bandLow);
+}
+
+TEST(Mixer3dTest, airmodeFullMixAtZeroThrottleBothDirections)
+{
+    float spread, top, bottom;
+    airmodeSpread(1503, &spread, &top, &bottom);   // forward, zero throttle
+    EXPECT_NEAR(0.4f, spread, 0.01f);
+    EXPECT_NEAR(0.0f, bottom, 0.01f);
+    airmodeSpread(1497, &spread, &top, &bottom);   // reverse, zero throttle
+    EXPECT_NEAR(0.4f, spread, 0.01f);               // stock: 0.2, the high motor clips at idle
+    EXPECT_NEAR(0.0f, bottom, 0.01f);
+}
+
+TEST(Mixer3dTest, airmodeFullMixAtFullThrottleBothDirections)
+{
+    float spread, top, bottom;
+    airmodeSpread(2000, &spread, &top, &bottom);   // forward, full throttle
+    EXPECT_NEAR(0.4f, spread, 0.01f);
+    EXPECT_NEAR(1.0f, top, 0.01f);
+    airmodeSpread(1000, &spread, &top, &bottom);   // reverse, full throttle
+    EXPECT_NEAR(0.4f, spread, 0.01f);
+    EXPECT_NEAR(1.0f, top, 0.01f);                  // stock: 0.8, throttle pulled down further than needed
+}

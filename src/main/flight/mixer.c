@@ -677,7 +677,7 @@ static void applyMixToMotors(const float motorMix[MAX_SUPPORTED_MOTORS], motorMi
     // Now add in the desired throttle, but keep in a range that doesn't clip adjusted
     // roll/pitch/yaw. This could move throttle down, but also up for those low throttle flips.
     for (int i = 0; i < mixerRuntime.motorCount; i++) {
-        float motorOutput = motorOutputMixSign * motorMix[i] + throttle * activeMixer[i].throttle;
+        float motorOutput = motorMix[i] + throttle * activeMixer[i].throttle;   // 3D direction already in motorMix
 #ifdef USE_THRUST_LINEARIZATION
         motorOutput = pidApplyThrustLinearization(motorOutput);
 #endif
@@ -994,10 +994,12 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
     float motorMix[MAX_SUPPORTED_MOTORS];
     float motorMixMax = 0, motorMixMin = 0;
     for (int i = 0; i < mixerRuntime.motorCount; i++) {
-        float mix =
+        // 3D: reversed motors need the opposite command for the same torque. Apply that here, not after the mixer
+        // adjustment, so airmode / the throttle constraint below see what each motor will actually get.
+        float mix = motorOutputMixSign * (
             scaledAxisPidRoll  * activeMixer[i].roll +
             scaledAxisPidPitch * activeMixer[i].pitch +
-            scaledAxisPidYaw   * activeMixer[i].yaw;
+            scaledAxisPidYaw   * activeMixer[i].yaw);
 
         if (mix > motorMixMax) {
             motorMixMax = mix;

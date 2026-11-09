@@ -905,6 +905,32 @@ TEST(pidControllerTest, testItermRotationHandling)
     EXPECT_NEAR(1139.6, pidData[FD_YAW].I, calculateTolerance(1139.6));
 }
 
+// 3D: while the I-term is frozen after a motor reversal it must not change at all, rotation included
+TEST(pidControllerTest, testItermRotationFrozen3d)
+{
+    resetTest();
+    pidProfile->iterm_rotation = true;
+    pidInit(pidProfile);
+
+    pidData[FD_ROLL].I = 10;
+    pidData[FD_PITCH].I = 1000;
+    pidData[FD_YAW].I = 1000;
+    gyro.gyroADCf[FD_ROLL] = -1000;
+
+    pidSetItermFreeze3d(true);
+    rotateItermAndAxisError();
+    EXPECT_FLOAT_EQ(pidData[FD_ROLL].I, 10);
+    EXPECT_FLOAT_EQ(pidData[FD_PITCH].I, 1000);
+    EXPECT_FLOAT_EQ(pidData[FD_YAW].I, 1000);
+
+    // released: stock rotation again
+    pidSetItermFreeze3d(false);
+    rotateItermAndAxisError();
+    EXPECT_FLOAT_EQ(pidData[FD_ROLL].I, 10);
+    EXPECT_NEAR(860.37, pidData[FD_PITCH].I, calculateTolerance(860.37));
+    EXPECT_NEAR(1139.6, pidData[FD_YAW].I, calculateTolerance(1139.6));
+}
+
 TEST(pidControllerTest, testLaunchControl)
 {
     // The launchControlGain is indirectly tested since when launch control is active the
