@@ -7,22 +7,21 @@
 >
 > **Pilots: download, testing guide and log upload are on the project page:
 > [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
-> (ready-to-flash boards on the [v0.3.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.2-3d-test)).
+> (ready-to-flash boards on the [v0.3.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.2-3d-test); v0.3.3 hexes follow).
 >
 > Base: **Betaflight 2026.6.2** (`e0b7bb01b`, latest stable). The previous 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`. Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
 > Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
 >
-> **Experimental: v0.3.3** (branch `3d-v0.3.3-experimental`, on top of v0.3.2, not released yet). Two 3D fixes, no new settings, saved
-> settings are kept:
+> **Current version: v0.3.3-test** (branch `3d-v0.3.3`, tag `v0.3.3-3d-test`): v0.3.2 (the v0.3.1 3D changes on Betaflight 2026.6.2)
+> plus two 3D fixes. No new settings, saved settings are kept. Flown on a 6S 5-inch (Hobbywing XRotor F7, AM32): both fixes confirmed
+> in blackbox logs (frozen I-term unchanged through every reversal hold; reverse motor outputs follow the corrected bounds).
 > - with `iterm_rotation = ON`, stock kept rotating the I-term while it is frozen after a motor reversal, so the I-term loaded for the
 >   new direction moved between axes during the roll-out (e.g. yaw I into roll). Frozen now means frozen; stock rotation resumes at release.
 > - in reverse the mixer applies the mix negated, but airmode / the throttle constraint used the bounds of the un-negated mix (every
 >   mixer type), so with roll + pitch + yaw together a motor could clip or full reverse throttle was pulled down too far. Same code in stock
 >   Betaflight. Upright and non-3D flight are bit-identical.
 >
-> **Current version: v0.3.2-test** (branch `3d-v0.3.2`): the v0.3.1 3D changes ported to Betaflight 2026.6.2. The BF3D logic is the
-> flight-tested v0.3.1 logic, but on a new Betaflight base, so v0.3.2 has **not been flown yet**. The 3D settings default to
-> ZoeFPV's best flying setup (Pass 53/56); set the stock values from the table to get stock Betaflight 3D behaviour.
+> The 3D settings default to ZoeFPV's best flying setup (Pass 53/56); set the stock values from the table to get stock Betaflight 3D behaviour.
 >
 > | Setting | Default (stock) | Values | What it does |
 > |---|---|---|---|
