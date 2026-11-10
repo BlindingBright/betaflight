@@ -9,7 +9,7 @@
 > | 31 mm 3D whoop | 6S 5-inch 3D |
 > |---|---|
 > | **[LilHorny_31mm_whoop_tune_preset_BF3D_v0.3.3.txt](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/tunes/LilHorny_31mm_whoop_tune_preset_BF3D_v0.3.3.txt)** | **[Unicorn_5inch_MAIN_tune_preset_BF3D_v0.3.3.txt](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/tunes/Unicorn_5inch_MAIN_tune_preset_BF3D_v0.3.3.txt)** |
-> | TBS Lucid AIO, 31 mm props, AM32 (tune flown on v0.3.1; hover-test first on 2026.6) | Hobbywing XRotor F7 (flown on v0.3.3) / T-Motor F7 (hover-tested), 6S, 5x4 3D props, AM32 |
+> | TBS Lucid AIO, 31 mm props, AM32 (tune flown on v0.3.1 and on v0.3.3; felt good, logs to follow) | Hobbywing XRotor F7 (flown on v0.3.3) / T-Motor F7 (hover-tested), 6S, 5x4 3D props, AM32 |
 > | [Lucid AIO firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_TBS_LUCID_AIO.hex) | [XRotor F7 firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_HOBBYWING_XROTORF7CONV.hex) · [T-Motor F7 firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_TMOTORF7.hex) |
 >
 > A preset changes the tune only (never your board, ports, switches, motor order or rates) and saves nothing if a line is rejected.
