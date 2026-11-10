@@ -1,58 +1,39 @@
 > [!IMPORTANT]
-> **This is a testing fork for 3D (bidirectional / reversible motor) mode.**
-> It exists to try out and flight-test changes and improvements to Betaflight's 3D mode,
-> with the hope that the ones that prove themselves get proposed for the main
-> [betaflight/betaflight](https://github.com/betaflight/betaflight) branch.
-> It is experimental: use the official releases for normal flying.
+> **BetaFlight 3D Edition: a testing fork of Betaflight for 3D (reversible-motor) flight.**
+> It exists to flight-test changes and improvements to Betaflight's 3D mode, with the aim of proposing the ones that prove themselves to
+> the main [betaflight/betaflight](https://github.com/betaflight/betaflight) project. It is experimental: use official releases for normal flying.
+> Base: **Betaflight 2026.6.2** (`e0b7bb01b`). **Current version: v0.3.3-test** (branch `3d-v0.3.3`, tag `v0.3.3-3d-test`, 90 boards).
+> The previous Betaflight 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`.
 >
-> **Pilots: download, testing guide and log upload are on the project page:
-> [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
-> (ready-to-flash boards on the [v0.3.3-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.3-3d-test)).
+> ### ⭐ Ready-to-paste tune presets
+> | 31 mm 3D whoop | 6S 5-inch 3D |
+> |---|---|
+> | **[LilHorny_31mm_whoop_tune_preset_BF3D_v0.3.3.txt](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/tunes/LilHorny_31mm_whoop_tune_preset_BF3D_v0.3.3.txt)** | **[Unicorn_5inch_MAIN_tune_preset_BF3D_v0.3.3.txt](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/tunes/Unicorn_5inch_MAIN_tune_preset_BF3D_v0.3.3.txt)** |
+> | TBS Lucid AIO, 31 mm props, AM32 (tune flown on v0.3.1; hover-test first on 2026.6) | Hobbywing XRotor F7 / T-Motor F7, 6S, 5x4 3D props, AM32 (flown on v0.3.3) |
+> | [Lucid AIO firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_TBS_LUCID_AIO.hex) | [XRotor F7 firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_HOBBYWING_XROTORF7CONV.hex) · [T-Motor F7 firmware](https://github.com/BlindingBright/betaflight/releases/download/v0.3.3-3d-test/BetaFlight3DEdition_v0.3.3-test_TMOTORF7.hex) |
 >
-> Base: **Betaflight 2026.6.2** (`e0b7bb01b`, latest stable). The previous 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`. Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
-> Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
+> A preset changes the tune only (never your board, ports, switches, motor order or rates) and saves nothing if a line is rejected.
+> **Read [PRESETS.md](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/PRESETS.md) first.**
 >
-> **Current version: v0.3.3-test** (branch `3d-v0.3.3`, tag `v0.3.3-3d-test`): v0.3.2 (the v0.3.1 3D changes on Betaflight 2026.6.2)
-> plus two 3D fixes. No new settings, saved settings are kept. Flown on a 6S 5-inch (Hobbywing XRotor F7, AM32): both fixes confirmed
-> in blackbox logs (frozen I-term unchanged through every reversal hold with `iterm_rotation` ON; reverse motor outputs follow the corrected bounds).
-> - with `iterm_rotation = ON`, stock kept rotating the I-term while it is frozen after a motor reversal, so the I-term loaded for the
->   new direction moved between axes during the roll-out (e.g. yaw I into roll). Frozen now means frozen; stock rotation resumes at release.
-> - in reverse the mixer applies the mix negated, but airmode / the throttle constraint used the bounds of the un-negated mix (every
->   mixer type), so with roll + pitch + yaw together a motor could clip or full reverse throttle was pulled down too far. Same code in stock
->   Betaflight. Upright and non-3D flight are bit-identical.
+> ### Everything in one place
+> **Pilots: [project page and all docs](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/README.md)** · [board list (90 boards)](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/BOARDS.md) ·
+> **[how every change works and why: HOW_IT_WORKS.md](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/HOW_IT_WORKS.md)** · [testing guide](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/TESTING_GUIDE.md) ·
+> [version history](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/CHANGELOG.md) · [releases](https://github.com/BlindingBright/betaflight/releases) · [upload logs](https://forms.gle/Vfq3c2W7Lp5FE36t5).
 >
-> The 3D settings default to ZoeFPV's best flying setup (Pass 53/56); set the stock values from the table to get stock Betaflight 3D behaviour.
+> ### What it changes (summary; stock Betaflight in 3D → 3D Edition)
+> | Change | Setting | Summary |
+> |---|---|---|
+> | I-term at a motor reversal | `3d_iterm_mode` `PER_DIRECTION`, `3d_iterm_release` `RPM`, `3d_iterm_load` `FLIP` | Stock zeroes the I-term for a fixed 250 ms. 3D Edition remembers one trim per direction, loads the right one at each flip, holds it frozen and releases it once every motor has restarted (bidirectional DShot eRPM, about 120-150 ms) |
+> | Anti-gravity | `3d_anti_gravity` `GATED`, `3d_ag_approach_pct` 15 | Stock treats the pass through center at every reversal as a throttle chop. Ignored now |
+> | Dynamic idle | `3d_dyn_idle` `ON` + `dyn_idle_min_rpm` | Stock skips it in 3D. Runs in 3D and gives restarting motors more command |
+> | Throttle safety (always on) | none | Low-voltage cutoff, failsafe stage 2, `thr_mid`/`thr_hover`, sag compensation and autopilot (altitude hold, GPS rescue) no longer send a 3D quad into reverse or do nothing |
+> | Reverse mixer limits (v0.3.3, always on) | none | Airmode/throttle limits used the upright bounds for reverse motors; same bug in stock Betaflight |
+> | Frozen I-term not rotated (v0.3.3, always on) | none | `iterm_rotation` no longer moves the held I-term between axes |
+> | Logging | `debug_mode = 3D_ITERM` | Motor direction, ms since reversal, per-direction trims; settings in the blackbox header |
 >
-> | Setting | Default (stock) | Values | What it does |
-> |---|---|---|---|
-> | `3d_iterm_mode` | `PER_DIRECTION` (`RESET`) | `RESET` / `HOLD` / `PER_DIRECTION` | What happens to I-term when the motors reverse. `PER_DIRECTION` keeps a learned I-term per motor direction and restores it on reversal, so a direction-dependent trim isn't thrown away on every flip. `HOLD` / `PER_DIRECTION` freeze integration while the props cross zero rpm. |
-> | `3d_iterm_release` | `RPM` (`TIME`) | `TIME` / `RPM` | End the post-reversal hold after `3d_iterm_reset_ms` (stock: hard-coded 250 ms), or as soon as every motor's bidirectional-DShot eRPM has dipped below and recovered above `3d_iterm_rpm_pct` % of the in-flight average, within `3d_iterm_min_ms`…`3d_iterm_max_ms` (50…400). Implausible eRPM jumps are filtered. Without RPM telemetry, `RPM` falls back to `3d_iterm_reset_ms`. |
-> | `3d_iterm_load` | `FLIP` | `FLIP` / `RELEASE` | Load the learned I-term at the reversal or when the hold ends. |
-> | `3d_iterm_learn_thr`, `3d_iterm_learn_hz_x10` | 50 %, 0.5 Hz | | Learning only in steady, unsaturated flight above 50 % of the quad's own average throttle, PT1 at 0.5 Hz. Memory persists across disarms. |
-> | `3d_iterm_axes` | `ALL` | `ALL` / `PITCH` / `ROLL_PITCH` | Axes that use the memory. |
-> | `3d_anti_gravity` | `GATED` (`STOCK`) | `STOCK` / `GATED` | `GATED`: the anti-gravity filter is reset at each reversal and ignores the throttle change while I-term is held, so a pass through center isn't a throttle chop. |
-> | `3d_ag_approach_pct` | 15 (0 = off) | 0 … 50 | With `GATED`, also ignore the throttle falling below this % on the way into a reversal. |
-> | `3d_dyn_idle` | `ON` (`OFF`) | `OFF` / `ON` | Runs the dynamic idle controller in 3D (stock skips it) and raises the idle of the current motor direction (DShot); no 1 % zero-throttle offset; I falls fast once every motor is >25 % above `dyn_idle_min_rpm`. Only active with bidirectional DShot and `dyn_idle_min_rpm` > 0 (stock default 0; 50 on 1S/2S whoops). |
-> | `debug_mode = 3D_ITERM` | | | [0] motor direction, [1] ms since reversal while holding (0 once released), [2-4] upright memory x10, [5-7] inverted memory x10 |
->
-> **3D fixes (always on in normal 3D; no settings):** stock Betaflight treats the bottom of the stick as "off", which in 3D is full
-> reverse. v0.3.1 fixes the places where that leaks into 3D:
-> - low-voltage cutoff (`vbat_cutoff_percent` < 100) scales the throttle toward stick center, not toward full reverse;
-> - failsafe stage 2 never commands reverse thrust (`failsafe_throttle` ≤ 1500 → zero thrust; above → upright thrust);
-> - `thr_mid` / `thr_hover` (2026.6 throttle curve) no longer move zero thrust off stick center;
-> - `vbat_sag_compensation` works in 3D (stock skips it), as a fraction of the active direction's band;
-> - (new in v0.3.2) when the autopilot sets the throttle (altitude hold, which 2026.6 also engages for failsafe landing, or GPS
->   rescue), the motors run upright: stock kept the last direction, so after a link loss in reverse it drove them in reverse.
->
-> With the 3D mode switch (`3D DISABLE / SWITCH`) active or `3d_switched_mode = ON`, stock behaviour applies.
->
-> The blackbox header records `3d_deadband_throttle` and all `3d_*` settings. Unit tests: `src/test/unit/mixer_3d_unittest.cc`
-> (real mixer + DShot code, both motor directions), `rc_3d_unittest` and `pid_unittest`.
->
-> 2026.6 renames: the D boost is now `d` (base) + `d_max_*` (max) with `d_max_gain` / `d_max_advance` (4.5: `d_min_*` / `d`), and
-> `dshot_idle_value` is `motor_idle`, so a 4.5 `diff all` doesn't paste as-is.
->
-> Build: `make CONFIG=<board>` with the [betaflight/config](https://github.com/betaflight/config) submodule (`src/config`, commit `3a406c5`).
+> With `feature 3D` off, flying is stock Betaflight, bit for bit. Full settings reference, stock-equivalent values and evidence: **[HOW_IT_WORKS.md](https://github.com/BlindingBright/Drones/blob/main/BetaFlight%203D%20Edition/HOW_IT_WORKS.md)**.
+> Source layout: 15 files differ from stock, all in the 3D code (`mixer.c`, `rc.c`, `rc_3d.h`, `pid.c`, CLI settings, blackbox header, debug mode).
+> Tests: `make CC=gcc CXX=g++ test_mixer_3d_unittest test_rc_3d_unittest test_pid_unittest` (mixer 33, rc_3d 4, PID 18).
 
 ![Betaflight](https://raw.githubusercontent.com/betaflight/.github/main/profile/images/bf_logo.svg#gh-light-mode-only)
 ![Betaflight](https://raw.githubusercontent.com/betaflight/.github/main/profile/images/bf_logo_dark.svg#gh-dark-mode-only)
