@@ -7,14 +7,14 @@
 >
 > **Pilots: download, testing guide and log upload are on the project page:
 > [BetaFlight 3D Edition](https://github.com/BlindingBright/Drones/tree/main/BetaFlight%203D%20Edition)**
-> (ready-to-flash boards on the [v0.3.2-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.2-3d-test); v0.3.3 hexes follow).
+> (ready-to-flash boards on the [v0.3.3-test release](https://github.com/BlindingBright/betaflight/releases/tag/v0.3.3-3d-test)).
 >
 > Base: **Betaflight 2026.6.2** (`e0b7bb01b`, latest stable). The previous 4.5.1-based v0.3.1-test stays on branch `3d-iterm-memory`. Test craft: a 3D whoop on a TBS Lucid AIO (AT32F435) with AM32 ESCs.
 > Every change is flight-tested against stock behaviour with blackbox logs before it is considered.
 >
 > **Current version: v0.3.3-test** (branch `3d-v0.3.3`, tag `v0.3.3-3d-test`): v0.3.2 (the v0.3.1 3D changes on Betaflight 2026.6.2)
 > plus two 3D fixes. No new settings, saved settings are kept. Flown on a 6S 5-inch (Hobbywing XRotor F7, AM32): both fixes confirmed
-> in blackbox logs (frozen I-term unchanged through every reversal hold; reverse motor outputs follow the corrected bounds).
+> in blackbox logs (frozen I-term unchanged through every reversal hold with `iterm_rotation` ON; reverse motor outputs follow the corrected bounds).
 > - with `iterm_rotation = ON`, stock kept rotating the I-term while it is frozen after a motor reversal, so the I-term loaded for the
 >   new direction moved between axes during the roll-out (e.g. yaw I into roll). Frozen now means frozen; stock rotation resumes at release.
 > - in reverse the mixer applies the mix negated, but airmode / the throttle constraint used the bounds of the un-negated mix (every
